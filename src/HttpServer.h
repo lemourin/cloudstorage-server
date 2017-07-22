@@ -46,6 +46,8 @@ class HttpSession {
 
   std::string hostname() const;
 
+  bool initialize(const std::string& provider, ICloudProvider::Hints&) const;
+
  private:
   HttpServer* http_server_;
   std::unordered_map<std::string, ProviderData::Pointer> providers_;
@@ -68,7 +70,7 @@ class HttpServer {
     HttpSession::ProviderData* data_;
   };
 
-  HttpServer(const std::string& hostname);
+  HttpServer(const std::string& hostname, Json::Value keys);
 
   HttpSession::Pointer session(const std::string& session_id);
 
@@ -77,6 +79,7 @@ class HttpServer {
 
   std::string hostname_;
   std::unordered_map<std::string, HttpSession::Pointer> data_;
+  Json::Value keys_;
   CloudServer mega_daemon_;
 };
 

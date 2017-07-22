@@ -1,5 +1,5 @@
-#ifndef AUTHORIZATION_SERVER_H
-#define AUTHORIZATION_SERVER_H
+#ifndef CLOUD_SERVER_H
+#define CLOUD_SERVER_H
 
 #include <microhttpd.h>
 
@@ -100,4 +100,4 @@ class ServerFactory : public IHttpServerFactory {
   CloudServer* server_;
 };
 
-#endif  // AUTHORIZATION_SERVER_H
+#endif  // CLOUD_SERVER_H

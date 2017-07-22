@@ -5,6 +5,9 @@
 #include <iostream>
 #include <mutex>
 #include <thread>
+#include <sstream>
+#include <fstream>
+#include <iostream>
 
 #include "HttpServer.h"
 #include "Utility.h"
@@ -45,8 +48,8 @@ int http_request_callback(void* cls, MHD_Connection* connection,
   return ret;
 }
 
-void run_server(std::string hostname, int port) {
-  HttpServer data(hostname);
+void run_server(Json::Value keys, std::string hostname, int port) {
+  HttpServer data(hostname, keys);
   MHD_Daemon* http_server =
       MHD_start_daemon(MHD_USE_POLL_INTERNALLY, port, nullptr, nullptr,
                        &http_request_callback, &data, MHD_OPTION_END);
@@ -57,6 +60,16 @@ void run_server(std::string hostname, int port) {
 
 int main(int argc, char** argv) {
   std::string hostname = "http://localhost";
-  if (argc == 2) hostname = "http://"s + argv[1];
-  run_server(hostname, 1337);
+  std::string key_file = "keys.json";
+  if (argc >= 2) hostname = "https://"s + argv[1];
+  if (argc >= 3) key_file = argv[2];
+  std::stringstream stream;
+  std::fstream f(key_file);
+  stream << f.rdbuf();
+  Json::Value keys;
+  if (!Json::Reader().parse(stream.str(), keys)) {
+    std::cerr << "Invalid key file\n";
+    return 1;
+  }
+  run_server(keys, hostname, 1337);
 }

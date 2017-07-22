@@ -6,7 +6,8 @@
 
 using namespace std::string_literals;
 
-const uint16_t AUTHORIZATION_SERVER_PORT = 12345;
+const uint16_t AUTHORIZATION_SERVER_PORT = 4444;
+const uint16_t MEGANZ_SERVER_PORT = 4141;
 
 namespace {
 
@@ -23,9 +24,10 @@ Json::Value finalize_request(HttpSession* session, Request request) {
 
 }  // namespace
 
-HttpServer::HttpServer(const std::string& hostname)
+HttpServer::HttpServer(const std::string& hostname, Json::Value keys)
     : hostname_(hostname),
-      mega_daemon_(IHttpServer::Type::MultiThreaded, 12346) {}
+      keys_(keys),
+      mega_daemon_(IHttpServer::Type::MultiThreaded, MEGANZ_SERVER_PORT) {}
 
 ICloudProvider::ICallback::Status HttpServer::Callback::userConsentRequired(
     const ICloudProvider& p) {
@@ -70,15 +72,17 @@ ICloudProvider::Pointer HttpSession::provider(MHD_Connection* connection) {
                                    r, ProviderData::Status::None)})
             .first;
     ICloudProvider::InitData data;
-    if (token) data.token_ = token;
+    if (token) {
+      std::cerr << "token: " << token << "\n";
+      data.token_ = token;
+    }
     data.http_server_ =
         std::make_unique<ServerFactory>(&http_server_->mega_daemon_);
     const char* access_token = MHD_lookup_connection_value(
         connection, MHD_GET_ARGUMENT_KIND, "access_token");
     if (access_token) data.hints_["access_token"] = access_token;
     data.hints_["state"] = session_id_ + "$$" + provider;
-    data.hints_["youtube_dl_url"] = "http://lemourin.ddns.net:9191";
-    data.hints_["redirect_uri_host"] = hostname();
+    initialize(provider, data.hints_);
     data.callback_ = std::make_unique<HttpServer::Callback>(p->second.get());
     r->initialize(std::move(data));
   }
@@ -107,16 +111,16 @@ Json::Value HttpSession::list_providers() const {
   Json::Value result;
   auto p = ICloudStorage::create()->providers();
   uint32_t idx = 0;
-  Json::Value array;
-  array.resize(p.size());
+  Json::Value array(Json::arrayValue);
   for (auto t : p) {
     ICloudProvider::InitData data;
     data.hints_["state"] = session_id_ + "$$" + t->name();
+    if (!initialize(t->name(), data.hints_)) continue;
     t->initialize(std::move(data));
     Json::Value v;
     v["name"] = t->name();
     v["url"] = t->authorizeLibraryUrl();
-    array[idx++] = v;
+    array.append(v);
   }
   result["providers"] = array;
   return result;
@@ -149,6 +153,19 @@ Json::Value HttpSession::get_item_data(MHD_Connection* connection) {
 }
 
 std::string HttpSession::hostname() const { return http_server_->hostname_; }
+
+bool HttpSession::initialize(const std::string& provider,
+                             ICloudProvider::Hints& hints) const {
+  if (!http_server_->keys_.isMember(provider)) return false;
+  hints["youtube_dl_url"] = "http://lemourin.ddns.net:9191";
+  hints["client_id"] = http_server_->keys_[provider]["client_id"].asString();
+  hints["client_secret"] =
+      http_server_->keys_[provider]["client_secret"].asString();
+  hints["redirect_uri_host"] = hostname();
+  hints["redirect_uri_port"] = std::to_string(AUTHORIZATION_SERVER_PORT);
+  hints["daemon_port"] = std::to_string(MEGANZ_SERVER_PORT);
+  return true;
+}
 
 HttpSession::Pointer HttpServer::session(const std::string& session_id) {
   auto it = data_.find(session_id);
