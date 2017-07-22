@@ -1,4 +1,4 @@
-#include "AuthorizationServer.h"
+#include "CloudServer.h"
 
 #include <iostream>
 
@@ -8,43 +8,39 @@ int httpRequestCallback(void* cls, MHD_Connection* c, const char* url,
                         const char* /*method*/, const char* /*version*/,
                         const char* /*upload_data*/,
                         size_t* /*upload_data_size*/, void** /*ptr*/) {
-  AuthorizationServer* server = static_cast<AuthorizationServer*>(cls);
-  AuthorizationServer::Connection connection(c, url);
+  CloudServer* server = static_cast<CloudServer*>(cls);
+  CloudServer::Connection connection(c, url);
   auto response = server->callback()->receivedConnection(*server, connection);
   response->send(connection);
-  return static_cast<const AuthorizationServer::Response*>(response.get())
-      ->result();
+  return static_cast<const CloudServer::Response*>(response.get())->result();
 }
 
 }  // namespace
 
-AuthorizationServer::Wrapper::Wrapper(AuthorizationServer* server,
-                                      const std::string& session,
-                                      IHttpServer::ICallback::Pointer cb)
+CloudServer::Wrapper::Wrapper(CloudServer* server, const std::string& session,
+                              IHttpServer::ICallback::Pointer cb)
     : server_(server), session_(session) {
   server_->addCallback(session, std::move(cb));
 }
 
-AuthorizationServer::Wrapper::~Wrapper() { server_->removeCallback(session_); }
+CloudServer::Wrapper::~Wrapper() { server_->removeCallback(session_); }
 
-IHttpServer::IResponse::Pointer AuthorizationServer::Wrapper::createResponse(
+IHttpServer::IResponse::Pointer CloudServer::Wrapper::createResponse(
     int code, const IResponse::Headers& headers,
     const std::string& body) const {
   return server_->createResponse(code, headers, body);
 }
 
-IHttpServer::IResponse::Pointer AuthorizationServer::Wrapper::createResponse(
+IHttpServer::IResponse::Pointer CloudServer::Wrapper::createResponse(
     int code, const IResponse::Headers& headers, int size, int chunk_size,
     IResponse::ICallback::Pointer cb) const {
   return server_->createResponse(code, headers, size, chunk_size,
                                  std::move(cb));
 }
 
-IHttpServer::IResponse::Pointer
-AuthorizationServer::Callback::receivedConnection(
+IHttpServer::IResponse::Pointer CloudServer::Callback::receivedConnection(
     const IHttpServer& d, const IHttpServer::IConnection& connection) {
-  const AuthorizationServer& server =
-      static_cast<const AuthorizationServer&>(d);
+  const CloudServer& server = static_cast<const CloudServer&>(d);
   const char* state = connection.getParameter("state");
   if (!state ||
       server.client_callbacks_.find(state) ==
@@ -54,9 +50,8 @@ AuthorizationServer::Callback::receivedConnection(
       d, connection);
 }
 
-AuthorizationServer::Response::Response(int code,
-                                        const IResponse::Headers& headers,
-                                        const std::string& body)
+CloudServer::Response::Response(int code, const IResponse::Headers& headers,
+                                const std::string& body)
     : response_(MHD_create_response_from_buffer(
           body.length(), (void*)body.c_str(), MHD_RESPMEM_MUST_COPY)),
       result_(),
@@ -65,16 +60,16 @@ AuthorizationServer::Response::Response(int code,
     MHD_add_response_header(response_, it.first.c_str(), it.second.c_str());
 }
 
-AuthorizationServer::Response::~Response() {
+CloudServer::Response::~Response() {
   if (response_) MHD_destroy_response(response_);
 }
 
-void AuthorizationServer::Response::send(const IConnection& c) {
+void CloudServer::Response::send(const IConnection& c) {
   MHD_Connection* connection = static_cast<const Connection&>(c).connection();
   result_ = MHD_queue_response(connection, code_, response_);
 }
 
-AuthorizationServer::CallbackResponse::CallbackResponse(
+CloudServer::CallbackResponse::CallbackResponse(
     int code, const IResponse::Headers& headers, int size, int chunk_size,
     IResponse::ICallback::Pointer callback) {
   code_ = code;
@@ -93,18 +88,18 @@ AuthorizationServer::CallbackResponse::CallbackResponse(
     MHD_add_response_header(response_, it.first.c_str(), it.second.c_str());
 }
 
-AuthorizationServer::Connection::Connection(MHD_Connection* c, const char* url)
+CloudServer::Connection::Connection(MHD_Connection* c, const char* url)
     : connection_(c), url_(url) {}
 
-const char* AuthorizationServer::Connection::getParameter(
+const char* CloudServer::Connection::getParameter(
     const std::string& name) const {
   return MHD_lookup_connection_value(connection_, MHD_GET_ARGUMENT_KIND,
                                      name.c_str());
 }
 
-std::string AuthorizationServer::Connection::url() const { return url_; }
+std::string CloudServer::Connection::url() const { return url_; }
 
-AuthorizationServer::AuthorizationServer(IHttpServer::Type type, int port)
+CloudServer::CloudServer(IHttpServer::Type type, int port)
     : http_server_(MHD_start_daemon(type == IHttpServer::Type::SingleThreaded
                                         ? MHD_USE_POLL_INTERNALLY
                                         : MHD_USE_THREAD_PER_CONNECTION,
@@ -112,36 +107,35 @@ AuthorizationServer::AuthorizationServer(IHttpServer::Type type, int port)
                                     this, MHD_OPTION_END)),
       callback_(std::make_unique<Callback>()) {}
 
-AuthorizationServer::~AuthorizationServer() { MHD_stop_daemon(http_server_); }
+CloudServer::~CloudServer() { MHD_stop_daemon(http_server_); }
 
-AuthorizationServer::IResponse::Pointer AuthorizationServer::createResponse(
+CloudServer::IResponse::Pointer CloudServer::createResponse(
     int code, const IResponse::Headers& headers,
     const std::string& body) const {
   return std::make_unique<Response>(code, headers, body);
 }
 
-AuthorizationServer::IResponse::Pointer AuthorizationServer::createResponse(
+CloudServer::IResponse::Pointer CloudServer::createResponse(
     int code, const IResponse::Headers& headers, int size, int chunk_size,
     IResponse::ICallback::Pointer cb) const {
   return std::make_unique<CallbackResponse>(code, headers, size, chunk_size,
                                             std::move(cb));
 }
 
-void AuthorizationServer::addCallback(const std::string& str,
-                                      ICallback::Pointer cb) {
+void CloudServer::addCallback(const std::string& str, ICallback::Pointer cb) {
   client_callbacks_[str] = std::move(cb);
 }
 
-void AuthorizationServer::removeCallback(const std::string& str) {
+void CloudServer::removeCallback(const std::string& str) {
   auto it = client_callbacks_.find(str);
   if (it != std::end(client_callbacks_)) client_callbacks_.erase(it);
 }
 
-ServerFactory::ServerFactory(AuthorizationServer* server) : server_(server) {}
+ServerFactory::ServerFactory(CloudServer* server) : server_(server) {}
 
 IHttpServer::Pointer ServerFactory::create(IHttpServer::ICallback::Pointer cb,
                                            const std::string& session,
                                            IHttpServer::Type, int port) {
-  return std::make_unique<AuthorizationServer::Wrapper>(server_, session,
-                                                        std::move(cb));
+  return std::make_unique<CloudServer::Wrapper>(server_, session,
+                                                std::move(cb));
 }

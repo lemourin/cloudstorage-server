@@ -27,10 +27,12 @@ int http_request_callback(void* cls, MHD_Connection* connection,
     auto session = data->session(session_id);
     if (url == "/list_providers"s) {
       result = session->list_providers();
+    } else if (url == "/exchange_code"s) {
+      result = session->exchange_code(connection);
     } else if (url == "/list_directory"s) {
       result = session->list_directory(connection);
-    } else if (url == "/retry"s) {
-      result = session->retry(connection);
+    } else if (url == "/get_item_data"s) {
+      result = session->get_item_data(connection);
     }
   }
 
@@ -43,8 +45,8 @@ int http_request_callback(void* cls, MHD_Connection* connection,
   return ret;
 }
 
-void run_server(int port) {
-  HttpServer data;
+void run_server(std::string hostname, int port) {
+  HttpServer data(hostname);
   MHD_Daemon* http_server =
       MHD_start_daemon(MHD_USE_POLL_INTERNALLY, port, nullptr, nullptr,
                        &http_request_callback, &data, MHD_OPTION_END);
@@ -53,4 +55,8 @@ void run_server(int port) {
   MHD_stop_daemon(http_server);
 }
 
-int main() { run_server(1337); }
+int main(int argc, char** argv) {
+  std::string hostname = "http://localhost";
+  if (argc == 2) hostname = "http://"s + argv[1];
+  run_server(hostname, 1337);
+}

@@ -12,54 +12,41 @@ namespace {
 
 template <class Request>
 Json::Value finalize_request(HttpSession* session, Request request) {
-  int request_id = session->add(request);
-  if (session->status(*request->provider()) !=
-      HttpSession::Status::ConsentRequired) {
-    request->wait();
-  }
-  if (session->status(*request->provider()) ==
-      HttpSession::Status::ConsentRequired) {
+  if (!request->provider()) {
     Json::Value result;
-    result["error"] = "consent required";
-    result["consent_url"] = request->provider()->authorizeLibraryUrl();
-    result["id"] = request_id;
+    result["error"] = "invalid provider"s;
     return result;
-  } else {
-    return request->result();
   }
+
+  return request->result();
 }
 
 }  // namespace
 
-HttpServer::HttpServer()
-    : authorization_server_(IHttpServer::Type::SingleThreaded,
-                            AUTHORIZATION_SERVER_PORT) {}
+HttpServer::HttpServer(const std::string& hostname)
+    : hostname_(hostname),
+      mega_daemon_(IHttpServer::Type::MultiThreaded, 12346) {}
 
 ICloudProvider::ICallback::Status HttpServer::Callback::userConsentRequired(
     const ICloudProvider& p) {
   std::cerr << "waiting for user consent " << p.name() << "\n";
-  session_data_->set_status(p, HttpSession::Status::ConsentRequired);
-  {
-    std::lock_guard<std::mutex> lock(session_data_->lock());
-    for (auto r : session_data_->requests()) r->notify();
-  }
-  return Status::WaitForAuthorizationCode;
+  return Status::None;
 }
 
 void HttpServer::Callback::accepted(const ICloudProvider& p) {
-  std::cerr << "accepted " << p.name() << "\n";
-  session_data_->set_status(p, HttpSession::Status::Accepted);
+  data_->status_ = HttpSession::ProviderData::Status::Accepted;
+  std::cerr << "accepted " << p.name() << ": " << p.token() << "\n";
 }
 
 void HttpServer::Callback::declined(const ICloudProvider& p) {
+  data_->status_ = HttpSession::ProviderData::Status::Denied;
   std::cerr << "declined " << p.name() << "\n";
-  session_data_->set_status(p, HttpSession::Status::Declined);
 }
 
 void HttpServer::Callback::error(const ICloudProvider& p,
                                  const std::string& d) {
+  data_->status_ = HttpSession::ProviderData::Status::Denied;
   std::cerr << "error " << d << "\n";
-  session_data_->set_status(p, HttpSession::Status::Error);
 }
 
 HttpSession::HttpSession(HttpServer* server, const std::string& session)
@@ -68,62 +55,52 @@ HttpSession::HttpSession(HttpServer* server, const std::string& session)
 ICloudProvider::Pointer HttpSession::provider(MHD_Connection* connection) {
   const char* provider = MHD_lookup_connection_value(
       connection, MHD_GET_ARGUMENT_KIND, "provider");
-  if (!provider) provider = "";
-  ICloudProvider::Pointer p = nullptr;
-  for (auto r : providers_)
-    if (r.first->name() == provider) p = r.first;
-  if (!p) {
-    p = ICloudStorage::create()->provider(provider);
-    if (!p) return nullptr;
+  const char* token =
+      MHD_lookup_connection_value(connection, MHD_GET_ARGUMENT_KIND, "token");
+  if (!provider) return nullptr;
+  auto p = providers_.find(provider);
+  if (p == std::end(providers_) ||
+      p->second->status_ == ProviderData::Status::Denied ||
+      (token && p->second->provider_->token() != token)) {
+    auto r = ICloudStorage::create()->provider(provider);
+    if (!r) return nullptr;
+    if (p != std::end(providers_)) providers_.erase(p);
+    p = providers_
+            .insert({provider, std::make_shared<ProviderData>(
+                                   r, ProviderData::Status::None)})
+            .first;
     ICloudProvider::InitData data;
-    data.hints_["state"] = session_id_ + provider;
-    if (p->name() == "mega" || p->name() == "owncloud" ||
-        p->name() == "amazons3") {
-      {
-        std::fstream file(RESOURCE_PATH + "/"s + p->name() + "_login.html"s);
-        std::stringstream buffer;
-        buffer << file.rdbuf();
-        data.hints_["login_page"] = buffer.str();
-      }
-      {
-        std::fstream file(RESOURCE_PATH + "/"s + p->name() + "_success.html"s);
-        std::stringstream buffer;
-        buffer << file.rdbuf();
-        data.hints_["success_page"] = buffer.str();
-      }
-    } else {
-      std::fstream file(RESOURCE_PATH + "/default_success.html"s);
-      std::stringstream buffer;
-      buffer << file.rdbuf();
-      data.hints_["success_page"] = buffer.str();
-    }
-    {
-      std::fstream file(RESOURCE_PATH + "/default_error.html"s);
-      std::stringstream buffer;
-      buffer << file.rdbuf();
-      data.hints_["error_page"] = buffer.str();
-    }
-    data.callback_ = std::make_unique<HttpServer::Callback>(this);
+    if (token) data.token_ = token;
     data.http_server_ =
-        std::make_unique<ServerFactory>(&http_server_->authorization_server_);
-    p->initialize(std::move(data));
-    providers_.push_back({p, Status::None});
+        std::make_unique<ServerFactory>(&http_server_->mega_daemon_);
+    const char* access_token = MHD_lookup_connection_value(
+        connection, MHD_GET_ARGUMENT_KIND, "access_token");
+    if (access_token) data.hints_["access_token"] = access_token;
+    data.hints_["state"] = session_id_ + "$$" + provider;
+    data.hints_["youtube_dl_url"] = "http://lemourin.ddns.net:9191";
+    data.hints_["redirect_uri_host"] = hostname();
+    data.callback_ = std::make_unique<HttpServer::Callback>(p->second.get());
+    r->initialize(std::move(data));
   }
-  return p;
+  return p->second->provider_;
 }
 
-Json::Value HttpSession::retry(MHD_Connection* connection) {
-  const char* request_id = MHD_lookup_connection_value(
-      connection, MHD_GET_ARGUMENT_KIND, "request_id");
-  auto r = request(request_id);
+Json::Value HttpSession::exchange_code(MHD_Connection* connection) {
+  auto provider = this->provider(connection);
   Json::Value result;
-  if (!r) {
-    result["error"] = "Invalid request id"s;
+  const char* code =
+      MHD_lookup_connection_value(connection, MHD_GET_ARGUMENT_KIND, "code");
+  if (!code || !provider) {
+    std::string msg = "missing";
+    if (!code) msg += " code";
+    if (!provider) msg += " provider";
+    result["error"] = msg;
     return result;
   }
-  std::cerr << "retrying request: " << request_id << "\n";
-  auto ret = r->result();
-  return ret;
+  auto token = provider->exchangeCodeAsync(code)->result();
+  result["token"] = token;
+  result["provider"] = provider->name();
+  return result;
 }
 
 Json::Value HttpSession::list_providers() const {
@@ -132,7 +109,15 @@ Json::Value HttpSession::list_providers() const {
   uint32_t idx = 0;
   Json::Value array;
   array.resize(p.size());
-  for (auto t : p) array[idx++] = t->name();
+  for (auto t : p) {
+    ICloudProvider::InitData data;
+    data.hints_["state"] = session_id_ + "$$" + t->name();
+    t->initialize(std::move(data));
+    Json::Value v;
+    v["name"] = t->name();
+    v["url"] = t->authorizeLibraryUrl();
+    array[idx++] = v;
+  }
   result["providers"] = array;
   return result;
 }
@@ -142,50 +127,28 @@ Json::Value HttpSession::list_directory(MHD_Connection* connection) {
   const char* item_id =
       MHD_lookup_connection_value(connection, MHD_GET_ARGUMENT_KIND, "item_id");
   if (!item_id) {
-    result["error"] = "Missing item id"s;
+    result["error"] = "missing item id"s;
     return result;
   }
   auto request = std::make_shared<ListDirectoryRequest>(provider(connection),
                                                         this, item_id);
-  if (!request->provider()) {
-    result["error"] = "Invalid provider"s;
-    return result;
-  }
   return finalize_request(this, request);
 }
 
-GenericRequest::Pointer HttpSession::request(const char* id) {
-  std::lock_guard<std::mutex> lock(lock_);
-  int i = (id != nullptr ? std::atoi(id) : 0) - first_request_id_;
-  if (i >= 0 && i < requests_.size())
-    return requests_[i];
-  else
-    return nullptr;
+Json::Value HttpSession::get_item_data(MHD_Connection* connection) {
+  Json::Value result;
+  const char* item_id =
+      MHD_lookup_connection_value(connection, MHD_GET_ARGUMENT_KIND, "item_id");
+  if (!item_id) {
+    result["error"] = "missing item id"s;
+    return result;
+  }
+  auto request =
+      std::make_shared<GetItemDataRequest>(provider(connection), this, item_id);
+  return finalize_request(this, request);
 }
 
-HttpSession::Status HttpSession::status(const ICloudProvider& p) {
-  std::lock_guard<std::mutex> lock(lock_);
-  for (auto r : providers_)
-    if (r.first->name() == p.name()) return r.second;
-  throw std::logic_error("invalid provider");
-}
-
-void HttpSession::set_status(const ICloudProvider& p,
-                             HttpSession::Status status) {
-  std::lock_guard<std::mutex> lock(lock_);
-  for (auto& r : providers_)
-    if (r.first->name() == p.name()) {
-      r.second = status;
-      return;
-    }
-  throw std::logic_error("invalid provider");
-}
-
-int HttpSession::add(GenericRequest::Pointer r) {
-  std::lock_guard<std::mutex> lock(lock_);
-  requests_.push_back(r);
-  return requests_.size() - 1;
-}
+std::string HttpSession::hostname() const { return http_server_->hostname_; }
 
 HttpSession::Pointer HttpServer::session(const std::string& session_id) {
   auto it = data_.find(session_id);

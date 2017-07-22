@@ -2,21 +2,52 @@
 
 #include "HttpServer.h"
 
+#include <iostream>
+
 using namespace std::string_literals;
+
+namespace {
+
+class ListDirectoryCb : public IListDirectoryCallback {
+ public:
+  ListDirectoryCb(ListDirectoryRequest* r) : request_(r), error_(false) {}
+
+  void receivedItem(IItem::Pointer item) {}
+
+  void done(const std::vector<IItem::Pointer>& result) { request_->notify(); }
+
+  void error(const std::string& description) {
+    error_ = true;
+    std::cerr << description << "\n";
+    request_->notify();
+  }
+
+  bool error_occured() const { return error_; }
+
+ private:
+  ListDirectoryRequest* request_;
+  bool error_;
+};
+
+std::string file_type_to_string(IItem::FileType type) {
+  switch (type) {
+    case IItem::FileType::Audio:
+      return "audio";
+    case IItem::FileType::Directory:
+      return "directory";
+    case IItem::FileType::Image:
+      return "image";
+    case IItem::FileType::Unknown:
+      return "unknown";
+    case IItem::FileType::Video:
+      return "video";
+  }
+}
+
+}  // namespace
 
 GenericRequest::GenericRequest(ICloudProvider::Pointer p, HttpSession* session)
     : provider_(p), session_(session) {}
-
-Json::Value GenericRequest::auth_error() const {
-  Json::Value result;
-  if (session_->status(*provider_) == HttpSession::Status::ConsentRequired)
-    result["error"] = "consent required";
-  else if (session_->status(*provider_) == HttpSession::Status::Declined)
-    result["error"] = "consent declined";
-  else if (session_->status(*provider_) == HttpSession::Status::Error)
-    result["error"] = "internal error";
-  return result;
-}
 
 ICloudProvider::Pointer GenericRequest::provider() const { return provider_; }
 
@@ -27,22 +58,24 @@ void GenericRequest::notify() const { semaphore_.notify(); }
 ListDirectoryRequest::ListDirectoryRequest(ICloudProvider::Pointer p,
                                            HttpSession* session,
                                            const char* item_id)
-    : GenericRequest(p, session) {
+    : GenericRequest(p, session),
+      callback_(std::make_shared<ListDirectoryCb>(this)) {
   if (!provider()) return;
   if (item_id != "root"s)
     item_request_ = provider()->getItemDataAsync(item_id, [this](auto item) {
-      if (!item)
+      if (!item) {
         this->notify();
-      else {
+      } else {
         std::lock_guard<std::mutex> lock(lock_);
-        request_ = this->provider()->listDirectoryAsync(
-            item, [this](auto) { this->notify(); });
+        item_ = item;
+        request_ = this->provider()->listDirectoryAsync(item, callback_);
       }
     });
   else {
     std::lock_guard<std::mutex> lock(lock_);
+    item_ = this->provider()->rootDirectory();
     request_ = this->provider()->listDirectoryAsync(
-        this->provider()->rootDirectory(), [this](auto) { this->notify(); });
+        this->provider()->rootDirectory(), callback_);
   }
 }
 
@@ -51,32 +84,57 @@ ListDirectoryRequest::~ListDirectoryRequest() {
   if (request_) request_->cancel();
 }
 
-Json::Value ListDirectoryRequest::result() const {
-  Json::Value result = auth_error();
-  if (result.isMember("error")) return result;
+bool ListDirectoryRequest::should_wait() const {
+  std::lock_guard<std::mutex> lock(lock_);
+  return !request_;
+}
 
-  bool wait = false;
-  {
-    std::lock_guard<std::mutex> lock(lock_);
-    if (!request_) wait = true;
+Json::Value ListDirectoryRequest::result() const {
+  Json::Value result;
+
+  if (should_wait()) this->wait();
+  if (should_wait()) {
+    result["error"] = "invalid item";
+    result["consent_url"] = provider()->authorizeLibraryUrl();
+    return result;
   }
-  if (wait) this->wait();
-  {
-    std::lock_guard<std::mutex> lock(lock_);
-    if (!request_) {
-      result["error"] = "invalid item";
-      return result;
-    }
-  }
-  result["token"] = provider()->token();
-  result["hints"] = to_json(provider()->hints());
-  Json::Value array;
+  Json::Value array(Json::arrayValue);
   for (auto i : request_->result()) {
     Json::Value v;
     v["id"] = i->id();
     v["filename"] = i->filename();
+    v["type"] = file_type_to_string(i->type());
     array.append(v);
   }
-  result["items"] = array;
+  if (static_cast<ListDirectoryCb*>(callback_.get())->error_occured()) {
+    result["error"] = "error";
+    result["consent_url"] = provider()->authorizeLibraryUrl();
+  } else {
+    result["items"] = array;
+    result["token"] = provider()->token();
+    result["access_token"] = provider()->hints()["access_token"];
+    result["provider"] = provider()->name();
+  }
   return result;
+}
+
+GetItemDataRequest::GetItemDataRequest(ICloudProvider::Pointer p,
+                                       HttpSession* session,
+                                       const char* item_id)
+    : GenericRequest(p, session) {
+  if (!provider()) return;
+  request_ = p->getItemDataAsync(item_id, [this](auto) { this->notify(); });
+}
+
+GetItemDataRequest::~GetItemDataRequest() { request_ = nullptr; }
+
+Json::Value GetItemDataRequest::result() const {
+  Json::Value r;
+  auto item = request_->result();
+  if (!item) {
+    r["error"] = "error occured";
+    return r;
+  }
+  r["url"] = item->url();
+  return r;
 }

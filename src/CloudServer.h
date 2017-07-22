@@ -8,11 +8,11 @@
 using cloudstorage::IHttpServer;
 using cloudstorage::IHttpServerFactory;
 
-class AuthorizationServer : public IHttpServer {
+class CloudServer : public IHttpServer {
  public:
   class Wrapper : public IHttpServer {
    public:
-    Wrapper(AuthorizationServer*, const std::string& session,
+    Wrapper(CloudServer*, const std::string& session,
             IHttpServer::ICallback::Pointer);
     ~Wrapper();
 
@@ -24,11 +24,11 @@ class AuthorizationServer : public IHttpServer {
 
    private:
     std::string session_;
-    AuthorizationServer* server_;
+    CloudServer* server_;
   };
 
-  AuthorizationServer(IHttpServer::Type type, int port);
-  ~AuthorizationServer();
+  CloudServer(IHttpServer::Type type, int port);
+  ~CloudServer();
 
   class Callback : public ICallback {
    public:
@@ -90,14 +90,14 @@ class AuthorizationServer : public IHttpServer {
 
 class ServerFactory : public IHttpServerFactory {
  public:
-  ServerFactory(AuthorizationServer* server);
+  ServerFactory(CloudServer* server);
 
   IHttpServer::Pointer create(IHttpServer::ICallback::Pointer,
                               const std::string& session_id, IHttpServer::Type,
                               int port) override;
 
  private:
-  AuthorizationServer* server_;
+  CloudServer* server_;
 };
 
 #endif  // AUTHORIZATION_SERVER_H

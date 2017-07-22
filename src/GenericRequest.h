@@ -44,11 +44,26 @@ class ListDirectoryRequest : public GenericRequest {
   ~ListDirectoryRequest();
 
   Json::Value result() const;
+  bool should_wait() const;
 
  private:
   mutable std::mutex lock_;
-  ICloudProvider::GetItemRequest::Pointer item_request_;
+  IItem::Pointer item_;
+  ICloudProvider::GetItemDataRequest::Pointer item_request_;
   ICloudProvider::ListDirectoryRequest::Pointer request_;
+  IListDirectoryCallback::Pointer callback_;
+};
+
+class GetItemDataRequest : public GenericRequest {
+ public:
+  GetItemDataRequest(ICloudProvider::Pointer, HttpSession*,
+                     const char* item_id);
+  ~GetItemDataRequest();
+
+  Json::Value result() const;
+
+ private:
+  ICloudProvider::GetItemDataRequest::Pointer request_;
 };
 
 #endif  // GENERIC_REQUEST_H
