@@ -3,6 +3,7 @@
 #include "HttpServer.h"
 
 #include <iostream>
+#include <cstring>
 
 using namespace std::string_literals;
 
@@ -135,6 +136,10 @@ Json::Value GetItemDataRequest::result() const {
     r["error"] = "error occured";
     return r;
   }
-  r["url"] = item->url();
+  std::string url = item->url();
+  if (provider()->name() == "mega") {
+    url.replace(0, strlen("https"), "http");
+  }
+  r["url"] = url;
   return r;
 }
