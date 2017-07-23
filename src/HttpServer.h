@@ -12,6 +12,9 @@
 
 using namespace cloudstorage;
 
+const uint16_t AUTHORIZATION_SERVER_PORT = 4444;
+const uint16_t MEGANZ_SERVER_PORT = 4141;
+
 class HttpServer;
 
 class HttpSession {
@@ -70,7 +73,8 @@ class HttpServer {
     HttpSession::ProviderData* data_;
   };
 
-  HttpServer(const std::string& hostname, Json::Value keys);
+  HttpServer(const std::string& hostname, uint16_t redirect_uri_port,
+             uint16_t daemon_port, Json::Value keys);
 
   HttpSession::Pointer session(const std::string& session_id);
 
@@ -78,8 +82,10 @@ class HttpServer {
   friend class HttpSession;
 
   std::string hostname_;
-  std::unordered_map<std::string, HttpSession::Pointer> data_;
+  uint16_t redirect_uri_port_;
+  uint16_t daemon_port_;
   Json::Value keys_;
+  std::unordered_map<std::string, HttpSession::Pointer> data_;
   CloudServer mega_daemon_;
 };
 

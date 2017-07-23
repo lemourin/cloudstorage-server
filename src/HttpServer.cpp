@@ -6,9 +6,6 @@
 
 using namespace std::string_literals;
 
-const uint16_t AUTHORIZATION_SERVER_PORT = 4444;
-const uint16_t MEGANZ_SERVER_PORT = 4141;
-
 namespace {
 
 template <class Request>
@@ -24,10 +21,13 @@ Json::Value finalize_request(HttpSession* session, Request request) {
 
 }  // namespace
 
-HttpServer::HttpServer(const std::string& hostname, Json::Value keys)
+HttpServer::HttpServer(const std::string& hostname, uint16_t redirect_uri_port,
+                       uint16_t daemon_port, Json::Value keys)
     : hostname_(hostname),
+      redirect_uri_port_(redirect_uri_port),
+      daemon_port_(daemon_port),
       keys_(keys),
-      mega_daemon_(IHttpServer::Type::MultiThreaded, MEGANZ_SERVER_PORT) {}
+      mega_daemon_(IHttpServer::Type::MultiThreaded, daemon_port) {}
 
 ICloudProvider::ICallback::Status HttpServer::Callback::userConsentRequired(
     const ICloudProvider& p) {
@@ -72,10 +72,7 @@ ICloudProvider::Pointer HttpSession::provider(MHD_Connection* connection) {
                                    r, ProviderData::Status::None)})
             .first;
     ICloudProvider::InitData data;
-    if (token) {
-      std::cerr << "token: " << token << "\n";
-      data.token_ = token;
-    }
+    if (token) data.token_ = token;
     data.http_server_ =
         std::make_unique<ServerFactory>(&http_server_->mega_daemon_);
     const char* access_token = MHD_lookup_connection_value(
@@ -162,8 +159,8 @@ bool HttpSession::initialize(const std::string& provider,
   hints["client_secret"] =
       http_server_->keys_[provider]["client_secret"].asString();
   hints["redirect_uri_host"] = hostname();
-  hints["redirect_uri_port"] = std::to_string(AUTHORIZATION_SERVER_PORT);
-  hints["daemon_port"] = std::to_string(MEGANZ_SERVER_PORT);
+  hints["redirect_uri_port"] = std::to_string(http_server_->redirect_uri_port_);
+  hints["daemon_port"] = std::to_string(http_server_->daemon_port_);
   return true;
 }
 
