@@ -1,6 +1,7 @@
 #include <microhttpd.h>
 
 #include <chrono>
+#include <climits>
 #include <deque>
 #include <fstream>
 #include <iostream>
@@ -52,7 +53,7 @@ void run_server(Json::Value keys, std::string hostname, int port) {
   MHD_Daemon* http_server =
       MHD_start_daemon(MHD_USE_POLL_INTERNALLY, port, nullptr, nullptr,
                        &http_request_callback, &data, MHD_OPTION_END);
-  std::this_thread::sleep_for(std::chrono::seconds::max());
+  std::this_thread::sleep_for(std::chrono::seconds(INT32_MAX));
   MHD_stop_daemon(http_server);
 }
 
