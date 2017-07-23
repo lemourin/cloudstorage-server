@@ -97,6 +97,11 @@ const char* CloudServer::Connection::getParameter(
                                      name.c_str());
 }
 
+const char* CloudServer::Connection::header(const std::string& name) const {
+  return MHD_lookup_connection_value(connection_, MHD_HEADER_KIND,
+                                     name.c_str());
+}
+
 std::string CloudServer::Connection::url() const { return url_; }
 
 CloudServer::CloudServer(IHttpServer::Type type, int port)
