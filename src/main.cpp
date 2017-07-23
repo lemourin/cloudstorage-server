@@ -14,6 +14,10 @@
 
 using namespace std::string_literals;
 
+const uint16_t DEFAULT_PORT = 1337;
+const uint16_t AUTHORIZATION_SERVER_PORT = 12345;
+const uint16_t MEGANZ_SERVER_PORT = 12346;
+
 int http_request_callback(void* cls, MHD_Connection* connection,
                           const char* url, const char* /*method*/,
                           const char* /*version*/, const char* /*upload_data*/,
@@ -60,7 +64,7 @@ void run_server(Json::Value keys, std::string hostname, int port,
 
 int main(int argc, char** argv) {
   std::string hostname = "http://localhost";
-  uint16_t port = 1337;
+  uint16_t port = DEFAULT_PORT;
   std::string key_file = "keys.json";
   uint16_t redirect_uri_port = AUTHORIZATION_SERVER_PORT;
   uint16_t daemon_port = MEGANZ_SERVER_PORT;

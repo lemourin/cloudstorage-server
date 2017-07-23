@@ -12,9 +12,6 @@
 
 using namespace cloudstorage;
 
-const uint16_t AUTHORIZATION_SERVER_PORT = 4444;
-const uint16_t MEGANZ_SERVER_PORT = 4141;
-
 class HttpServer;
 
 class HttpSession {
