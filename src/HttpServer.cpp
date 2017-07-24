@@ -62,8 +62,7 @@ ICloudProvider::Pointer HttpSession::provider(MHD_Connection* connection) {
   if (!provider) return nullptr;
   auto p = providers_.find(provider);
   if (p == std::end(providers_) ||
-      p->second->status_ == ProviderData::Status::Denied ||
-      (token && p->second->provider_->token() != token)) {
+      p->second->status_ == ProviderData::Status::Denied) {
     auto r = ICloudStorage::create()->provider(provider);
     if (!r) return nullptr;
     if (p != std::end(providers_)) providers_.erase(p);

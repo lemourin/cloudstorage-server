@@ -2,8 +2,8 @@
 
 #include "HttpServer.h"
 
-#include <iostream>
 #include <cstring>
+#include <iostream>
 
 using namespace std::string_literals;
 
@@ -138,7 +138,8 @@ Json::Value GetItemDataRequest::result() const {
   }
   std::string url = item->url();
   if (provider()->name() == "mega") {
-    url.replace(0, strlen("https"), "http");
+    if (url.find("https://") != std::string::npos)
+      url.replace(0, strlen("https"), "http");
   }
   r["url"] = url;
   return r;
