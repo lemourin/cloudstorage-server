@@ -153,13 +153,19 @@ std::string HttpSession::hostname() const { return http_server_->hostname_; }
 bool HttpSession::initialize(const std::string& provider,
                              ICloudProvider::Hints& hints) const {
   if (!http_server_->keys_.isMember(provider)) return false;
-  hints["youtube_dl_url"] = "http://lemourin.ddns.net:9191";
+  hints["youtube_dl_url"] = "http://lemourin.ddns.net/youtube-dl";
   hints["client_id"] = http_server_->keys_[provider]["client_id"].asString();
   hints["client_secret"] =
       http_server_->keys_[provider]["client_secret"].asString();
-  hints["redirect_uri_host"] = hostname();
-  hints["redirect_uri_port"] = std::to_string(http_server_->redirect_uri_port_);
-  hints["daemon_port"] = std::to_string(http_server_->daemon_port_);
+  hints["redirect_uri_host"] = hostname() + "/auth";
+  std::string port;
+  if (hostname().substr(0, "http://"s.length()) == "http://")
+    port = "80";
+  else
+    port = "443";
+  hints["redirect_uri_port"] = port;
+  hints["daemon_port"] = port;
+  hints["file_url"] = hostname() + "/mega";
   return true;
 }
 
