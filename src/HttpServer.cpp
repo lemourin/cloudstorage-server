@@ -157,15 +157,10 @@ bool HttpSession::initialize(const std::string& provider,
   hints["client_id"] = http_server_->keys_[provider]["client_id"].asString();
   hints["client_secret"] =
       http_server_->keys_[provider]["client_secret"].asString();
-  hints["redirect_uri_host"] = hostname() + "/auth";
-  std::string port;
-  if (hostname().substr(0, "http://"s.length()) == "http://")
-    port = "80";
-  else
-    port = "443";
-  hints["redirect_uri_port"] = port;
-  hints["daemon_port"] = port;
-  hints["file_url"] = hostname() + "/mega";
+  hints["redirect_uri_host"] = hostname();
+  hints["redirect_uri_port"] = http_server_->redirect_uri_port_;
+  hints["daemon_port"] = http_server_->daemon_port_;
+  hints["file_url"] = hostname();
   return true;
 }
 
