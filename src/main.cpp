@@ -50,10 +50,9 @@ int http_request_callback(void* cls, MHD_Connection* connection,
 
 void run_server(Json::Value config) {
   HttpServer data(config);
-  auto http_server = create_server(
-      IHttpServer::Type::SingleThreaded, config["port"].asInt(),
-      http_request_callback, &data, read_file(config["ssl_cert"].asString()),
-      read_file(config["ssl_key"].asString()));
+  auto http_server =
+      create_server(IHttpServer::Type::SingleThreaded, config["port"].asInt(),
+                    http_request_callback, &data, "", "");
   std::this_thread::sleep_for(std::chrono::seconds(INT32_MAX));
 }
 
