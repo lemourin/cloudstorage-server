@@ -31,4 +31,6 @@ class Semaphore {
 
 Json::Value to_json(cloudstorage::ICloudProvider::Hints);
 
+std::string read_file(const std::string& path);
+
 #endif  // UTILITY_H

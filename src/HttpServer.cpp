@@ -21,13 +21,14 @@ Json::Value finalize_request(HttpSession* session, Request request) {
 
 }  // namespace
 
-HttpServer::HttpServer(const std::string& hostname, uint16_t redirect_uri_port,
-                       uint16_t daemon_port, Json::Value keys)
-    : hostname_(hostname),
-      redirect_uri_port_(redirect_uri_port),
-      daemon_port_(daemon_port),
-      keys_(keys),
-      mega_daemon_(IHttpServer::Type::MultiThreaded, daemon_port) {}
+HttpServer::HttpServer(Json::Value config)
+    : hostname_(config["hostname"].asString()),
+      redirect_uri_port_(config["redirect_uri_port"].asInt()),
+      daemon_port_(config["daemon_port"].asInt()),
+      keys_(config["keys"]),
+      mega_daemon_(IHttpServer::Type::MultiThreaded, daemon_port_,
+                   read_file(config["ssl_cert"].asString()),
+                   read_file(config["ssl_key"].asString())) {}
 
 ICloudProvider::ICallback::Status HttpServer::Callback::userConsentRequired(
     const ICloudProvider& p) {

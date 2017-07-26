@@ -70,8 +70,7 @@ class HttpServer {
     HttpSession::ProviderData* data_;
   };
 
-  HttpServer(const std::string& hostname, uint16_t redirect_uri_port,
-             uint16_t daemon_port, Json::Value keys);
+  HttpServer(Json::Value config);
 
   HttpSession::Pointer session(const std::string& session_id);
 

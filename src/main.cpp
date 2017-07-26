@@ -14,10 +14,6 @@
 
 using namespace std::string_literals;
 
-const uint16_t DEFAULT_PORT = 1337;
-const uint16_t AUTHORIZATION_SERVER_PORT = 12345;
-const uint16_t MEGANZ_SERVER_PORT = 12346;
-
 int http_request_callback(void* cls, MHD_Connection* connection,
                           const char* url, const char* /*method*/,
                           const char* /*version*/, const char* /*upload_data*/,
@@ -52,34 +48,28 @@ int http_request_callback(void* cls, MHD_Connection* connection,
   return ret;
 }
 
-void run_server(Json::Value keys, std::string hostname, int port,
-                int redirect_uri_port, int daemon_port) {
-  HttpServer data(hostname, redirect_uri_port, daemon_port, keys);
-  MHD_Daemon* http_server =
-      MHD_start_daemon(MHD_USE_POLL_INTERNALLY, port, nullptr, nullptr,
-                       &http_request_callback, &data, MHD_OPTION_END);
+void run_server(Json::Value config) {
+  HttpServer data(config);
+  auto http_server = create_server(
+      IHttpServer::Type::SingleThreaded, config["port"].asInt(),
+      http_request_callback, &data, read_file(config["ssl_cert"].asString()),
+      read_file(config["ssl_key"].asString()));
   std::this_thread::sleep_for(std::chrono::seconds(INT32_MAX));
-  MHD_stop_daemon(http_server);
 }
 
 int main(int argc, char** argv) {
-  std::string hostname = "http://localhost";
-  uint16_t port = DEFAULT_PORT;
-  std::string key_file = "keys.json";
-  uint16_t redirect_uri_port = AUTHORIZATION_SERVER_PORT;
-  uint16_t daemon_port = MEGANZ_SERVER_PORT;
-  if (argc >= 2 && argv[1] != "localhost"s) hostname = "https://"s + argv[1];
-  if (argc >= 3) port = atoi(argv[2]);
-  if (argc >= 4) key_file = argv[3];
-  if (argc >= 5) redirect_uri_port = atoi(argv[4]);
-  if (argc >= 6) daemon_port = atoi(argv[5]);
-  std::stringstream stream;
-  std::fstream f(key_file);
-  stream << f.rdbuf();
-  Json::Value keys;
-  if (!Json::Reader().parse(stream.str(), keys)) {
-    std::cerr << "Invalid key file\n";
+  if (argc != 2) {
+    std::cerr << "usage: " << argv[0] << " config_file"
+              << "\n";
     return 1;
   }
-  run_server(keys, hostname, port, redirect_uri_port, daemon_port);
+  std::stringstream stream;
+  std::fstream f(argv[1]);
+  stream << f.rdbuf();
+  Json::Value config;
+  if (!Json::Reader().parse(stream.str(), config)) {
+    std::cerr << "invalid config\n";
+    return 1;
+  }
+  run_server(config);
 }

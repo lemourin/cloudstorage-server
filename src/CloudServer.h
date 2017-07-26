@@ -2,11 +2,14 @@
 #define CLOUD_SERVER_H
 
 #include <microhttpd.h>
+#include <memory>
 
 #include "cloudstorage/IHttpServer.h"
 
 using cloudstorage::IHttpServer;
 using cloudstorage::IHttpServerFactory;
+
+using DaemonPtr = std::unique_ptr<MHD_Daemon, void (*)(MHD_Daemon*)>;
 
 class CloudServer : public IHttpServer {
  public:
@@ -27,7 +30,9 @@ class CloudServer : public IHttpServer {
     CloudServer* server_;
   };
 
-  CloudServer(IHttpServer::Type type, int port);
+  CloudServer(IHttpServer::Type type, int port, const std::string& cert,
+              const std::string& key);
+
   ~CloudServer();
 
   class Callback : public ICallback {
@@ -84,7 +89,7 @@ class CloudServer : public IHttpServer {
   void removeCallback(const std::string&);
 
  private:
-  MHD_Daemon* http_server_;
+  DaemonPtr http_server_;
   ICallback::Pointer callback_;
   std::unordered_map<std::string, ICallback::Pointer> client_callbacks_;
 };
@@ -100,5 +105,9 @@ class ServerFactory : public IHttpServerFactory {
  private:
   CloudServer* server_;
 };
+
+DaemonPtr create_server(IHttpServer::Type type, int port,
+                        MHD_AccessHandlerCallback, void* data,
+                        const std::string& cert, const std::string& key);
 
 #endif  // CLOUD_SERVER_H

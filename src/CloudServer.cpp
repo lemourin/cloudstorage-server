@@ -104,15 +104,13 @@ const char* CloudServer::Connection::header(const std::string& name) const {
 
 std::string CloudServer::Connection::url() const { return url_; }
 
-CloudServer::CloudServer(IHttpServer::Type type, int port)
-    : http_server_(MHD_start_daemon(type == IHttpServer::Type::SingleThreaded
-                                        ? MHD_USE_POLL_INTERNALLY
-                                        : MHD_USE_THREAD_PER_CONNECTION,
-                                    port, NULL, NULL, &httpRequestCallback,
-                                    this, MHD_OPTION_END)),
+CloudServer::CloudServer(IHttpServer::Type type, int port,
+                         const std::string& cert, const std::string& key)
+    : http_server_(
+          create_server(type, port, httpRequestCallback, this, cert, key)),
       callback_(std::make_unique<Callback>()) {}
 
-CloudServer::~CloudServer() { MHD_stop_daemon(http_server_); }
+CloudServer::~CloudServer() { http_server_ = nullptr; }
 
 CloudServer::IResponse::Pointer CloudServer::createResponse(
     int code, const IResponse::Headers& headers,
@@ -143,4 +141,24 @@ IHttpServer::Pointer ServerFactory::create(IHttpServer::ICallback::Pointer cb,
                                            IHttpServer::Type, int port) {
   return std::make_unique<CloudServer::Wrapper>(server_, session,
                                                 std::move(cb));
+}
+
+DaemonPtr create_server(IHttpServer::Type type, int port,
+                        MHD_AccessHandlerCallback callback, void* data,
+                        const std::string& cert, const std::string& key) {
+  MHD_Daemon* daemon =
+      cert.empty()
+          ? MHD_start_daemon(type == IHttpServer::Type::SingleThreaded
+                                 ? MHD_USE_POLL_INTERNALLY
+                                 : MHD_USE_THREAD_PER_CONNECTION,
+                             port, NULL, NULL, callback, data, MHD_OPTION_END)
+          : MHD_start_daemon((type == IHttpServer::Type::SingleThreaded
+                                  ? MHD_USE_POLL_INTERNALLY
+                                  : MHD_USE_THREAD_PER_CONNECTION) |
+                                 MHD_USE_SSL,
+                             port, NULL, NULL, callback, data,
+                             MHD_OPTION_HTTPS_MEM_CERT, cert.c_str(),
+                             MHD_OPTION_HTTPS_MEM_KEY, key.c_str(),
+                             MHD_OPTION_END);
+  return DaemonPtr(daemon, [](MHD_Daemon* daemon) { MHD_stop_daemon(daemon); });
 }
