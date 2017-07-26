@@ -136,11 +136,6 @@ Json::Value GetItemDataRequest::result() const {
     r["error"] = "error occured";
     return r;
   }
-  std::string url = item->url();
-  if (provider()->name() == "mega") {
-    if (url.find("https://") != std::string::npos)
-      url.replace(0, strlen("https"), "http");
-  }
-  r["url"] = url;
+  r["url"] = item->url();
   return r;
 }
