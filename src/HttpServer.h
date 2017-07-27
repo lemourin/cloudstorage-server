@@ -80,6 +80,8 @@ class HttpServer {
   std::string hostname_;
   uint16_t redirect_uri_port_;
   uint16_t daemon_port_;
+  uint16_t public_daemon_port_;
+  std::string file_url_;
   Json::Value keys_;
   std::unordered_map<std::string, HttpSession::Pointer> data_;
   CloudServer mega_daemon_;

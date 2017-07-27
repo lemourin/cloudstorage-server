@@ -25,6 +25,8 @@ HttpServer::HttpServer(Json::Value config)
     : hostname_(config["hostname"].asString()),
       redirect_uri_port_(config["redirect_uri_port"].asInt()),
       daemon_port_(config["daemon_port"].asInt()),
+      public_daemon_port_(config["public_daemon_port"].asInt()),
+      file_url_(config["file_url"].asString()),
       keys_(config["keys"]),
       mega_daemon_(IHttpServer::Type::MultiThreaded, daemon_port_,
                    read_file(config["ssl_cert"].asString()),
@@ -160,8 +162,8 @@ bool HttpSession::initialize(const std::string& provider,
       http_server_->keys_[provider]["client_secret"].asString();
   hints["redirect_uri_host"] = hostname();
   hints["redirect_uri_port"] = std::to_string(http_server_->redirect_uri_port_);
-  hints["daemon_port"] = std::to_string(http_server_->daemon_port_);
-  hints["file_url"] = hostname();
+  hints["daemon_port"] = std::to_string(http_server_->public_daemon_port_);
+  hints["file_url"] = http_server_->file_url_;
   return true;
 }
 
