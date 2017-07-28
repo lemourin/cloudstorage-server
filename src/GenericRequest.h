@@ -12,13 +12,11 @@
 
 using namespace cloudstorage;
 
-class HttpSession;
-
 class GenericRequest {
  public:
   using Pointer = std::shared_ptr<GenericRequest>;
 
-  GenericRequest(ICloudProvider::Pointer, HttpSession*);
+  GenericRequest(ICloudProvider::Pointer);
 
   virtual ~GenericRequest() = default;
 
@@ -34,13 +32,11 @@ class GenericRequest {
  private:
   ICloudProvider::Pointer provider_;
   mutable Semaphore semaphore_;
-  HttpSession* session_;
 };
 
 class ListDirectoryRequest : public GenericRequest {
  public:
-  ListDirectoryRequest(ICloudProvider::Pointer, HttpSession*,
-                       const char* item_id);
+  ListDirectoryRequest(ICloudProvider::Pointer, const char* item_id);
   ~ListDirectoryRequest();
 
   Json::Value result() const;
@@ -56,8 +52,7 @@ class ListDirectoryRequest : public GenericRequest {
 
 class GetItemDataRequest : public GenericRequest {
  public:
-  GetItemDataRequest(ICloudProvider::Pointer, HttpSession*,
-                     const char* item_id);
+  GetItemDataRequest(ICloudProvider::Pointer, const char* item_id);
   ~GetItemDataRequest();
 
   Json::Value result() const;

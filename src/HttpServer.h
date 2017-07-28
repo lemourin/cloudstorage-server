@@ -14,27 +14,16 @@ using namespace cloudstorage;
 
 class HttpServer;
 
-class HttpSession {
+class HttpCloudProvider {
  public:
-  using Pointer = std::shared_ptr<HttpSession>;
+  using Pointer = std::shared_ptr<HttpCloudProvider>;
 
-  struct ProviderData {
-    using Pointer = std::shared_ptr<ProviderData>;
+  enum class Status { Accepted, Denied };
 
-    enum class Status { Accepted, Denied };
-
-    ProviderData(ICloudProvider::Pointer p, Status s)
-        : provider_(p), status_(s) {}
-
-    ICloudProvider::Pointer provider_;
-    std::atomic<Status> status_;
-  };
-
-  HttpSession(HttpServer*, const std::string& session_id);
+  HttpCloudProvider(HttpServer* http_server, std::string key)
+      : http_server_(http_server), key_(key) {}
 
   ICloudProvider::Pointer provider(MHD_Connection* connection);
-
-  Json::Value list_providers() const;
 
   Json::Value exchange_code(MHD_Connection* connection);
 
@@ -44,12 +33,13 @@ class HttpSession {
 
   std::mutex& lock() const { return lock_; }
 
-  bool initialize(const std::string& provider, ICloudProvider::Hints&) const;
+  void set_status(Status s) { status_ = s; }
 
  private:
   HttpServer* http_server_;
-  std::unordered_map<std::string, ProviderData::Pointer> providers_;
-  std::string session_id_;
+  std::string key_;
+  ICloudProvider::Pointer provider_;
+  std::atomic<Status> status_;
   mutable std::mutex lock_;
 };
 
@@ -57,7 +47,7 @@ class HttpServer {
  public:
   class Callback : public ICloudProvider::ICallback {
    public:
-    Callback(HttpSession::ProviderData* data) : data_(data) {}
+    Callback(HttpCloudProvider* data) : data_(data) {}
 
     Status userConsentRequired(const ICloudProvider& p);
     void accepted(const ICloudProvider&);
@@ -65,15 +55,19 @@ class HttpServer {
     void error(const ICloudProvider&, const std::string&);
 
    private:
-    HttpSession::ProviderData* data_;
+    HttpCloudProvider* data_;
   };
 
   HttpServer(Json::Value config);
 
-  HttpSession::Pointer session(const std::string& session_id);
+  bool initialize(const std::string& provider, ICloudProvider::Hints&) const;
+
+  Json::Value list_providers(MHD_Connection*) const;
+
+  HttpCloudProvider::Pointer provider(const std::string& key);
 
  private:
-  friend class HttpSession;
+  friend class HttpCloudProvider;
 
   std::string auth_url_;
   uint16_t auth_port_;
@@ -81,8 +75,8 @@ class HttpServer {
   uint16_t public_daemon_port_;
   std::string file_url_;
   Json::Value keys_;
-  std::unordered_map<std::string, HttpSession::Pointer> data_;
-  CloudServer mega_daemon_;
+  std::unordered_map<std::string, HttpCloudProvider::Pointer> data_;
+  CloudServer file_daemon_;
 };
 
 #endif  // HTTP_SERVER_H

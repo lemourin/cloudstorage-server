@@ -47,8 +47,8 @@ std::string file_type_to_string(IItem::FileType type) {
 
 }  // namespace
 
-GenericRequest::GenericRequest(ICloudProvider::Pointer p, HttpSession* session)
-    : provider_(p), session_(session) {}
+GenericRequest::GenericRequest(ICloudProvider::Pointer p)
+    : provider_(p) {}
 
 ICloudProvider::Pointer GenericRequest::provider() const { return provider_; }
 
@@ -57,9 +57,8 @@ void GenericRequest::wait() const { semaphore_.wait(); }
 void GenericRequest::notify() const { semaphore_.notify(); }
 
 ListDirectoryRequest::ListDirectoryRequest(ICloudProvider::Pointer p,
-                                           HttpSession* session,
                                            const char* item_id)
-    : GenericRequest(p, session),
+    : GenericRequest(p),
       callback_(std::make_shared<ListDirectoryCb>(this)) {
   if (!provider()) return;
   if (item_id != "root"s)
@@ -120,9 +119,8 @@ Json::Value ListDirectoryRequest::result() const {
 }
 
 GetItemDataRequest::GetItemDataRequest(ICloudProvider::Pointer p,
-                                       HttpSession* session,
                                        const char* item_id)
-    : GenericRequest(p, session) {
+    : GenericRequest(p) {
   if (!provider()) return;
   request_ = p->getItemDataAsync(item_id, [this](auto) { this->notify(); });
 }

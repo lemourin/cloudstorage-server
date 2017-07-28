@@ -21,21 +21,24 @@ int http_request_callback(void* cls, MHD_Connection* connection,
   std::cerr << "got request " << url << "\n";
   HttpServer* data = static_cast<HttpServer*>(cls);
   Json::Value result;
-
-  const char* session_id =
-      MHD_lookup_connection_value(connection, MHD_GET_ARGUMENT_KIND, "state");
-  if (!session_id) {
-    result["error"] = "missing state parameter";
+  const char* key =
+      MHD_lookup_connection_value(connection, MHD_GET_ARGUMENT_KIND, "key");
+  if (!key) {
+    result["error"] = "missing key";
   } else {
-    auto session = data->session(session_id);
-    if (url == "/list_providers"s) {
-      result = session->list_providers();
-    } else if (url == "/exchange_code"s) {
-      result = session->exchange_code(connection);
-    } else if (url == "/list_directory"s) {
-      result = session->list_directory(connection);
-    } else if (url == "/get_item_data"s) {
-      result = session->get_item_data(connection);
+    const char* provider = MHD_lookup_connection_value(
+        connection, MHD_GET_ARGUMENT_KIND, "provider");
+    if (provider) {
+      auto p = data->provider(key + " "s + provider);
+      if (url == "/exchange_code"s) {
+        result = p->exchange_code(connection);
+      } else if (url == "/list_directory"s) {
+        result = p->list_directory(connection);
+      } else if (url == "/get_item_data"s) {
+        result = p->get_item_data(connection);
+      }
+    } else {
+      if (url == "/list_providers"s) result = data->list_providers(connection);
     }
   }
 
