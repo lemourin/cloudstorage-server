@@ -22,8 +22,8 @@ Json::Value finalize_request(HttpSession* session, Request request) {
 }  // namespace
 
 HttpServer::HttpServer(Json::Value config)
-    : hostname_(config["hostname"].asString()),
-      redirect_uri_port_(config["redirect_uri_port"].asInt()),
+    : auth_url_(config["auth_url"].asString()),
+      auth_port_(config["auth_port"].asInt()),
       daemon_port_(config["daemon_port"].asInt()),
       public_daemon_port_(config["public_daemon_port"].asInt()),
       file_url_(config["file_url"].asString()),
@@ -151,8 +151,6 @@ Json::Value HttpSession::get_item_data(MHD_Connection* connection) {
   return finalize_request(this, request);
 }
 
-std::string HttpSession::hostname() const { return http_server_->hostname_; }
-
 bool HttpSession::initialize(const std::string& provider,
                              ICloudProvider::Hints& hints) const {
   if (!http_server_->keys_.isMember(provider)) return false;
@@ -160,8 +158,8 @@ bool HttpSession::initialize(const std::string& provider,
   hints["client_id"] = http_server_->keys_[provider]["client_id"].asString();
   hints["client_secret"] =
       http_server_->keys_[provider]["client_secret"].asString();
-  hints["redirect_uri_host"] = hostname();
-  hints["redirect_uri_port"] = std::to_string(http_server_->redirect_uri_port_);
+  hints["redirect_uri_host"] = http_server_->auth_url_;
+  hints["redirect_uri_port"] = std::to_string(http_server_->auth_port_);
   hints["daemon_port"] = std::to_string(http_server_->public_daemon_port_);
   hints["file_url"] = http_server_->file_url_;
   return true;

@@ -44,8 +44,6 @@ class HttpSession {
 
   std::mutex& lock() const { return lock_; }
 
-  std::string hostname() const;
-
   bool initialize(const std::string& provider, ICloudProvider::Hints&) const;
 
  private:
@@ -77,8 +75,8 @@ class HttpServer {
  private:
   friend class HttpSession;
 
-  std::string hostname_;
-  uint16_t redirect_uri_port_;
+  std::string auth_url_;
+  uint16_t auth_port_;
   uint16_t daemon_port_;
   uint16_t public_daemon_port_;
   std::string file_url_;
