@@ -24,9 +24,10 @@ Json::Value finalize_request(Request request) {
 HttpServer::HttpServer(Json::Value config)
     : auth_url_(config["auth_url"].asString()),
       auth_port_(config["auth_port"].asInt()),
+      file_url_(config["file_url"].asString()),
       daemon_port_(config["daemon_port"].asInt()),
       public_daemon_port_(config["public_daemon_port"].asInt()),
-      file_url_(config["file_url"].asString()),
+      youtube_dl_url_(config["youtube_dl_url"].asString()),
       keys_(config["keys"]),
       file_daemon_(IHttpServer::Type::MultiThreaded, daemon_port_,
                    read_file(config["ssl_cert"].asString()),
@@ -126,7 +127,7 @@ Json::Value HttpCloudProvider::get_item_data(MHD_Connection* connection) {
 bool HttpServer::initialize(const std::string& provider,
                             ICloudProvider::Hints& hints) const {
   if (!keys_.isMember(provider)) return false;
-  hints["youtube_dl_url"] = "http://lemourin.ddns.net/youtube-dl";
+  hints["youtube_dl_url"] = youtube_dl_url_;
   hints["client_id"] = keys_[provider]["client_id"].asString();
   hints["client_secret"] = keys_[provider]["client_secret"].asString();
   hints["redirect_uri_host"] = auth_url_;

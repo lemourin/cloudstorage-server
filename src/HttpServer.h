@@ -71,9 +71,10 @@ class HttpServer {
 
   std::string auth_url_;
   uint16_t auth_port_;
+  std::string file_url_;
   uint16_t daemon_port_;
   uint16_t public_daemon_port_;
-  std::string file_url_;
+  std::string youtube_dl_url_;
   Json::Value keys_;
   std::unordered_map<std::string, HttpCloudProvider::Pointer> data_;
   CloudServer file_daemon_;
