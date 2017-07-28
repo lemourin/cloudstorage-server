@@ -21,7 +21,7 @@ class HttpSession {
   struct ProviderData {
     using Pointer = std::shared_ptr<ProviderData>;
 
-    enum class Status { None, Accepted, Denied };
+    enum class Status { Accepted, Denied };
 
     ProviderData(ICloudProvider::Pointer p, Status s)
         : provider_(p), status_(s) {}

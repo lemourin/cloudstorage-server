@@ -71,7 +71,7 @@ ICloudProvider::Pointer HttpSession::provider(MHD_Connection* connection) {
     if (p != std::end(providers_)) providers_.erase(p);
     p = providers_
             .insert({provider, std::make_shared<ProviderData>(
-                                   r, ProviderData::Status::None)})
+                                   r, ProviderData::Status::Denied)})
             .first;
     ICloudProvider::InitData data;
     if (token) data.token_ = token;
