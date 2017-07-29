@@ -21,6 +21,33 @@ Json::Value finalize_request(Request request) {
 
 }  // namespace
 
+CloudConfig::CloudConfig(const Json::Value& config,
+                         IHttpServerFactory::Pointer f)
+    : auth_url_(config["auth_url"].asString()),
+      auth_port_(config["auth_port"].asInt()),
+      file_url_(config["file_url"].asString()),
+      daemon_port_(config["daemon_port"].asInt()),
+      public_daemon_port_(config["public_daemon_port"].asInt()),
+      youtube_dl_url_(config["youtube_dl_url"].asString()),
+      keys_(config["keys"]),
+      file_daemon_(
+          DispatchServer(f, IHttpServer::Type::MultiThreaded, daemon_port_)) {}
+
+std::unique_ptr<ICloudProvider::Hints> CloudConfig::hints(
+    const std::string& provider) const {
+  if (!keys_.isMember(provider)) return nullptr;
+  auto p = std::make_unique<ICloudProvider::Hints>();
+  auto& hints = *p;
+  hints["youtube_dl_url"] = youtube_dl_url_;
+  hints["client_id"] = keys_[provider]["client_id"].asString();
+  hints["client_secret"] = keys_[provider]["client_secret"].asString();
+  hints["redirect_uri_host"] = auth_url_;
+  hints["redirect_uri_port"] = std::to_string(auth_port_);
+  hints["daemon_port"] = std::to_string(public_daemon_port_);
+  hints["file_url"] = file_url_;
+  return p;
+}
+
 IHttpServer::IResponse::Pointer
 HttpServer::ConnectionCallback::receivedConnection(
     const IHttpServer& d, const IHttpServer::IConnection& c) {
@@ -39,6 +66,8 @@ HttpServer::ConnectionCallback::receivedConnection(
         result = p->list_directory(c);
       } else if (c.url() == "/get_item_data"s) {
         result = p->get_item_data(c);
+      } else if (c.url() == "/thumbnail"s) {
+        result["error"] = "unimplemented";
       }
     } else {
       if (c.url() == "/list_providers"s) result = server_->list_providers(c);
@@ -50,21 +79,13 @@ HttpServer::ConnectionCallback::receivedConnection(
 }
 
 HttpServer::HttpServer(Json::Value config)
-    : auth_url_(config["auth_url"].asString()),
-      auth_port_(config["auth_port"].asInt()),
-      file_url_(config["file_url"].asString()),
-      daemon_port_(config["daemon_port"].asInt()),
-      public_daemon_port_(config["public_daemon_port"].asInt()),
-      youtube_dl_url_(config["youtube_dl_url"].asString()),
-      keys_(config["keys"]),
-      server_factory_(std::make_unique<MicroHttpdServerFactory>(
+    : server_factory_(std::make_unique<MicroHttpdServerFactory>(
           read_file(config["ssl_cert"].asString()),
           read_file(config["ssl_key"].asString()))),
-      file_daemon_(DispatchServer(
-          server_factory_, IHttpServer::Type::MultiThreaded, daemon_port_)),
       main_server_(server_factory_->create(
           std::make_unique<ConnectionCallback>(this), "",
-          IHttpServer::Type::SingleThreaded, config["port"].asInt())) {}
+          IHttpServer::Type::MultiThreaded, config["port"].asInt())),
+      config_(config, server_factory_) {}
 
 ICloudProvider::ICallback::Status HttpServer::Callback::userConsentRequired(
     const ICloudProvider& p) {
@@ -94,16 +115,17 @@ ICloudProvider::Pointer HttpCloudProvider::provider(
   const char* token = connection.getParameter("token");
   if (!provider) return nullptr;
   if (!provider_ || status_ == Status::Denied) {
+    std::lock_guard<std::mutex> lock(lock_);
     provider_ = ICloudStorage::create()->provider(provider);
     if (!provider_) return nullptr;
     ICloudProvider::InitData data;
     if (token) data.token_ = token;
     data.http_server_ =
-        std::make_unique<ServerWrapperFactory>(http_server_->file_daemon_);
+        std::make_unique<ServerWrapperFactory>(config_.file_daemon_);
     const char* access_token = connection.getParameter("access_token");
+    data.hints_ = *config_.hints(provider);
     if (access_token) data.hints_["access_token"] = access_token;
     data.hints_["state"] = key_;
-    http_server_->initialize(provider, data.hints_);
     data.callback_ = std::make_unique<HttpServer::Callback>(this);
     provider_->initialize(std::move(data));
   }
@@ -154,19 +176,6 @@ Json::Value HttpCloudProvider::get_item_data(
   return finalize_request(request);
 }
 
-bool HttpServer::initialize(const std::string& provider,
-                            ICloudProvider::Hints& hints) const {
-  if (!keys_.isMember(provider)) return false;
-  hints["youtube_dl_url"] = youtube_dl_url_;
-  hints["client_id"] = keys_[provider]["client_id"].asString();
-  hints["client_secret"] = keys_[provider]["client_secret"].asString();
-  hints["redirect_uri_host"] = auth_url_;
-  hints["redirect_uri_port"] = std::to_string(auth_port_);
-  hints["daemon_port"] = std::to_string(public_daemon_port_);
-  hints["file_url"] = file_url_;
-  return true;
-}
-
 Json::Value HttpServer::list_providers(
     const IHttpServer::IConnection& connection) const {
   Json::Value result;
@@ -174,25 +183,27 @@ Json::Value HttpServer::list_providers(
   auto p = ICloudStorage::create()->providers();
   uint32_t idx = 0;
   Json::Value array(Json::arrayValue);
-  for (auto t : p) {
-    ICloudProvider::InitData data;
-    if (!initialize(t->name(), data.hints_)) continue;
-    data.hints_["state"] = key + " "s + t->name();
-    t->initialize(std::move(data));
-    Json::Value v;
-    v["name"] = t->name();
-    v["url"] = t->authorizeLibraryUrl();
-    array.append(v);
-  }
+  for (auto t : p)
+    if (auto hints = config_.hints(t->name())) {
+      ICloudProvider::InitData data;
+      hints->insert({"state", key + " "s + t->name()});
+      data.hints_ = *hints;
+      t->initialize(std::move(data));
+      Json::Value v;
+      v["name"] = t->name();
+      v["url"] = t->authorizeLibraryUrl();
+      array.append(v);
+    }
   result["providers"] = array;
   return result;
 }
 
 HttpCloudProvider::Pointer HttpServer::provider(const std::string& key) {
+  std::lock_guard<std::mutex> lock(lock_);
   auto it = data_.find(key);
   if (it == std::end(data_)) {
     std::cerr << "creating provider " << key << "\n";
-    auto s = std::make_shared<HttpCloudProvider>(this, key);
+    auto s = std::make_shared<HttpCloudProvider>(config_, key);
     data_[key] = s;
     return s;
   } else {

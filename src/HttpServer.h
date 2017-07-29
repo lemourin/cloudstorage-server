@@ -13,14 +13,30 @@ using namespace cloudstorage;
 
 class HttpServer;
 
+struct CloudConfig {
+  CloudConfig(const Json::Value&, IHttpServerFactory::Pointer);
+
+  std::unique_ptr<ICloudProvider::Hints> hints(
+      const std::string& provider) const;
+
+  std::string auth_url_;
+  uint16_t auth_port_;
+  std::string file_url_;
+  uint16_t daemon_port_;
+  uint16_t public_daemon_port_;
+  std::string youtube_dl_url_;
+  Json::Value keys_;
+  DispatchServer file_daemon_;
+};
+
 class HttpCloudProvider {
  public:
   using Pointer = std::shared_ptr<HttpCloudProvider>;
 
   enum class Status { Accepted, Denied };
 
-  HttpCloudProvider(HttpServer* http_server, std::string key)
-      : http_server_(http_server), key_(key) {}
+  HttpCloudProvider(CloudConfig config, std::string key)
+      : config_(config), key_(key) {}
 
   ICloudProvider::Pointer provider(const IHttpServer::IConnection& connection);
 
@@ -35,7 +51,7 @@ class HttpCloudProvider {
   void set_status(Status s) { status_ = s; }
 
  private:
-  HttpServer* http_server_;
+  CloudConfig config_;
   std::string key_;
   ICloudProvider::Pointer provider_;
   std::atomic<Status> status_;
@@ -70,8 +86,6 @@ class HttpServer {
 
   HttpServer(Json::Value config);
 
-  bool initialize(const std::string& provider, ICloudProvider::Hints&) const;
-
   Json::Value list_providers(const IHttpServer::IConnection&) const;
 
   HttpCloudProvider::Pointer provider(const std::string& key);
@@ -79,17 +93,11 @@ class HttpServer {
  private:
   friend class HttpCloudProvider;
 
-  std::string auth_url_;
-  uint16_t auth_port_;
-  std::string file_url_;
-  uint16_t daemon_port_;
-  uint16_t public_daemon_port_;
-  std::string youtube_dl_url_;
-  Json::Value keys_;
   std::unordered_map<std::string, HttpCloudProvider::Pointer> data_;
   IHttpServerFactory::Pointer server_factory_;
-  DispatchServer file_daemon_;
   IHttpServer::Pointer main_server_;
+  CloudConfig config_;
+  mutable std::mutex lock_;
 };
 
 #endif  // HTTP_SERVER_H
