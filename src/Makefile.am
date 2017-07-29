@@ -15,7 +15,8 @@ main_SOURCES = \
 	Utility.cpp \
 	GenericRequest.cpp \
 	HttpServer.cpp \
-	CloudServer.cpp
+	DispatchServer.cpp \
+	MicroHttpdServer.cpp
 
 main_LDADD = \
 	$(libjsoncpp_LIBS) \

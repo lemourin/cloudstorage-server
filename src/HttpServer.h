@@ -4,10 +4,9 @@
 #include <cloudstorage/ICloudProvider.h>
 #include <cloudstorage/ICloudStorage.h>
 #include <json/json.h>
-#include <microhttpd.h>
 #include <atomic>
 
-#include "CloudServer.h"
+#include "DispatchServer.h"
 #include "GenericRequest.h"
 
 using namespace cloudstorage;
@@ -23,13 +22,13 @@ class HttpCloudProvider {
   HttpCloudProvider(HttpServer* http_server, std::string key)
       : http_server_(http_server), key_(key) {}
 
-  ICloudProvider::Pointer provider(MHD_Connection* connection);
+  ICloudProvider::Pointer provider(const IHttpServer::IConnection& connection);
 
-  Json::Value exchange_code(MHD_Connection* connection);
+  Json::Value exchange_code(const IHttpServer::IConnection& connection);
 
-  Json::Value list_directory(MHD_Connection* connection);
+  Json::Value list_directory(const IHttpServer::IConnection& connection);
 
-  Json::Value get_item_data(MHD_Connection* connection);
+  Json::Value get_item_data(const IHttpServer::IConnection& connection);
 
   std::mutex& lock() const { return lock_; }
 
@@ -58,11 +57,22 @@ class HttpServer {
     HttpCloudProvider* data_;
   };
 
+  class ConnectionCallback : public IHttpServer::ICallback {
+   public:
+    ConnectionCallback(HttpServer* server) : server_(server) {}
+
+    IHttpServer::IResponse::Pointer receivedConnection(
+        const IHttpServer&, const IHttpServer::IConnection&) override;
+
+   private:
+    HttpServer* server_;
+  };
+
   HttpServer(Json::Value config);
 
   bool initialize(const std::string& provider, ICloudProvider::Hints&) const;
 
-  Json::Value list_providers(MHD_Connection*) const;
+  Json::Value list_providers(const IHttpServer::IConnection&) const;
 
   HttpCloudProvider::Pointer provider(const std::string& key);
 
@@ -77,7 +87,9 @@ class HttpServer {
   std::string youtube_dl_url_;
   Json::Value keys_;
   std::unordered_map<std::string, HttpCloudProvider::Pointer> data_;
-  CloudServer file_daemon_;
+  IHttpServerFactory::Pointer server_factory_;
+  DispatchServer file_daemon_;
+  IHttpServer::Pointer main_server_;
 };
 
 #endif  // HTTP_SERVER_H

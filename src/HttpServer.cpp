@@ -21,6 +21,34 @@ Json::Value finalize_request(Request request) {
 
 }  // namespace
 
+IHttpServer::IResponse::Pointer
+HttpServer::ConnectionCallback::receivedConnection(
+    const IHttpServer& d, const IHttpServer::IConnection& c) {
+  std::cerr << "got request " << c.url() << "\n";
+  Json::Value result;
+  const char* key = c.getParameter("key");
+  if (!key) {
+    result["error"] = "missing key";
+  } else {
+    const char* provider = c.getParameter("provider");
+    if (provider) {
+      auto p = server_->provider(key + " "s + provider);
+      if (c.url() == "/exchange_code"s) {
+        result = p->exchange_code(c);
+      } else if (c.url() == "/list_directory"s) {
+        result = p->list_directory(c);
+      } else if (c.url() == "/get_item_data"s) {
+        result = p->get_item_data(c);
+      }
+    } else {
+      if (c.url() == "/list_providers"s) result = server_->list_providers(c);
+    }
+  }
+
+  auto str = Json::StyledWriter().write(result);
+  return d.createResponse(200, {{"Content-Type", "application/json"}}, str);
+}
+
 HttpServer::HttpServer(Json::Value config)
     : auth_url_(config["auth_url"].asString()),
       auth_port_(config["auth_port"].asInt()),
@@ -29,9 +57,14 @@ HttpServer::HttpServer(Json::Value config)
       public_daemon_port_(config["public_daemon_port"].asInt()),
       youtube_dl_url_(config["youtube_dl_url"].asString()),
       keys_(config["keys"]),
-      file_daemon_(IHttpServer::Type::MultiThreaded, daemon_port_,
-                   read_file(config["ssl_cert"].asString()),
-                   read_file(config["ssl_key"].asString())) {}
+      server_factory_(std::make_unique<MicroHttpdServerFactory>(
+          read_file(config["ssl_cert"].asString()),
+          read_file(config["ssl_key"].asString()))),
+      file_daemon_(DispatchServer(
+          server_factory_, IHttpServer::Type::MultiThreaded, daemon_port_)),
+      main_server_(server_factory_->create(
+          std::make_unique<ConnectionCallback>(this), "",
+          IHttpServer::Type::SingleThreaded, config["port"].asInt())) {}
 
 ICloudProvider::ICallback::Status HttpServer::Callback::userConsentRequired(
     const ICloudProvider& p) {
@@ -56,11 +89,9 @@ void HttpServer::Callback::error(const ICloudProvider& p,
 }
 
 ICloudProvider::Pointer HttpCloudProvider::provider(
-    MHD_Connection* connection) {
-  const char* provider = MHD_lookup_connection_value(
-      connection, MHD_GET_ARGUMENT_KIND, "provider");
-  const char* token =
-      MHD_lookup_connection_value(connection, MHD_GET_ARGUMENT_KIND, "token");
+    const IHttpServer::IConnection& connection) {
+  const char* provider = connection.getParameter("provider");
+  const char* token = connection.getParameter("token");
   if (!provider) return nullptr;
   if (!provider_ || status_ == Status::Denied) {
     provider_ = ICloudStorage::create()->provider(provider);
@@ -68,9 +99,8 @@ ICloudProvider::Pointer HttpCloudProvider::provider(
     ICloudProvider::InitData data;
     if (token) data.token_ = token;
     data.http_server_ =
-        std::make_unique<ServerFactory>(&http_server_->file_daemon_);
-    const char* access_token = MHD_lookup_connection_value(
-        connection, MHD_GET_ARGUMENT_KIND, "access_token");
+        std::make_unique<ServerWrapperFactory>(http_server_->file_daemon_);
+    const char* access_token = connection.getParameter("access_token");
     if (access_token) data.hints_["access_token"] = access_token;
     data.hints_["state"] = key_;
     http_server_->initialize(provider, data.hints_);
@@ -80,11 +110,11 @@ ICloudProvider::Pointer HttpCloudProvider::provider(
   return provider_;
 }
 
-Json::Value HttpCloudProvider::exchange_code(MHD_Connection* connection) {
+Json::Value HttpCloudProvider::exchange_code(
+    const IHttpServer::IConnection& connection) {
   auto provider = this->provider(connection);
   Json::Value result;
-  const char* code =
-      MHD_lookup_connection_value(connection, MHD_GET_ARGUMENT_KIND, "code");
+  const char* code = connection.getParameter("code");
   if (!code || !provider) {
     std::string msg = "missing";
     if (!code) msg += " code";
@@ -98,10 +128,10 @@ Json::Value HttpCloudProvider::exchange_code(MHD_Connection* connection) {
   return result;
 }
 
-Json::Value HttpCloudProvider::list_directory(MHD_Connection* connection) {
+Json::Value HttpCloudProvider::list_directory(
+    const IHttpServer::IConnection& connection) {
   Json::Value result;
-  const char* item_id =
-      MHD_lookup_connection_value(connection, MHD_GET_ARGUMENT_KIND, "item_id");
+  const char* item_id = connection.getParameter("item_id");
   if (!item_id) {
     result["error"] = "missing item id"s;
     return result;
@@ -111,10 +141,10 @@ Json::Value HttpCloudProvider::list_directory(MHD_Connection* connection) {
   return finalize_request(request);
 }
 
-Json::Value HttpCloudProvider::get_item_data(MHD_Connection* connection) {
+Json::Value HttpCloudProvider::get_item_data(
+    const IHttpServer::IConnection& connection) {
   Json::Value result;
-  const char* item_id =
-      MHD_lookup_connection_value(connection, MHD_GET_ARGUMENT_KIND, "item_id");
+  const char* item_id = connection.getParameter("item_id");
   if (!item_id) {
     result["error"] = "missing item id"s;
     return result;
@@ -137,10 +167,10 @@ bool HttpServer::initialize(const std::string& provider,
   return true;
 }
 
-Json::Value HttpServer::list_providers(MHD_Connection* connection) const {
+Json::Value HttpServer::list_providers(
+    const IHttpServer::IConnection& connection) const {
   Json::Value result;
-  const char* key =
-      MHD_lookup_connection_value(connection, MHD_GET_ARGUMENT_KIND, "key");
+  const char* key = connection.getParameter("key");
   auto p = ICloudStorage::create()->providers();
   uint32_t idx = 0;
   Json::Value array(Json::arrayValue);
