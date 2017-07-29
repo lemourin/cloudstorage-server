@@ -114,8 +114,8 @@ ICloudProvider::Pointer HttpCloudProvider::provider(
   const char* provider = connection.getParameter("provider");
   const char* token = connection.getParameter("token");
   if (!provider) return nullptr;
+  std::lock_guard<std::mutex> lock(lock_);
   if (!provider_ || status_ == Status::Denied) {
-    std::lock_guard<std::mutex> lock(lock_);
     provider_ = ICloudStorage::create()->provider(provider);
     if (!provider_) return nullptr;
     ICloudProvider::InitData data;
