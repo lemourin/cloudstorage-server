@@ -103,25 +103,21 @@ HttpServer::HttpServer(Json::Value config)
           MicroHttpdServer::Type::MultiThreaded, config["port"].asInt())),
       config_(config, server_factory_) {}
 
-ICloudProvider::ICallback::Status HttpServer::Callback::userConsentRequired(
+ICloudProvider::IAuthCallback::Status HttpServer::Callback::userConsentRequired(
     const ICloudProvider& p) {
   std::cerr << "waiting for user consent " << p.name() << "\n";
   return Status::None;
 }
 
-void HttpServer::Callback::accepted(const ICloudProvider& p) {
-  data_->set_status(HttpCloudProvider::Status::Accepted);
-  std::cerr << "accepted " << p.name() << ": " << p.token() << "\n";
-}
-
-void HttpServer::Callback::declined(const ICloudProvider& p) {
-  data_->set_status(HttpCloudProvider::Status::Denied);
-  std::cerr << "declined " << p.name() << "\n";
-}
-
-void HttpServer::Callback::error(const ICloudProvider& p, Error e) {
-  data_->set_status(HttpCloudProvider::Status::Denied);
-  std::cerr << "error " << e.description_ << "\n";
+void HttpServer::Callback::done(const ICloudProvider& p, EitherError<void> e) {
+  if (e.left()) {
+    data_->set_status(HttpCloudProvider::Status::Denied);
+    std::cerr << "error " << e.left()->code_ << ": " << e.left()->description_
+              << "\n";
+  } else {
+    data_->set_status(HttpCloudProvider::Status::Accepted);
+    std::cerr << "accepted " << p.name() << ": " << p.token() << "\n";
+  }
 }
 
 ICloudProvider::Pointer HttpCloudProvider::provider(

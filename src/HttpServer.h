@@ -60,14 +60,12 @@ class HttpCloudProvider {
 
 class HttpServer {
  public:
-  class Callback : public ICloudProvider::ICallback {
+  class Callback : public ICloudProvider::IAuthCallback {
    public:
     Callback(HttpCloudProvider* data) : data_(data) {}
 
     Status userConsentRequired(const ICloudProvider& p) override;
-    void accepted(const ICloudProvider&) override;
-    void declined(const ICloudProvider&) override;
-    void error(const ICloudProvider&, Error) override;
+    void done(const ICloudProvider&, EitherError<void>) override;
 
    private:
     HttpCloudProvider* data_;
