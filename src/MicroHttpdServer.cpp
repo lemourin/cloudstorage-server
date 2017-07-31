@@ -23,8 +23,6 @@
 
 #include "MicroHttpdServer.h"
 
-namespace cloudstorage {
-
 namespace {
 
 int http_request_callback(void* cls, MHD_Connection* c, const char* url,
@@ -98,8 +96,7 @@ const char* MicroHttpdServer::Connection::header(
 std::string MicroHttpdServer::Connection::url() const { return url_; }
 
 MicroHttpdServer::MicroHttpdServer(IHttpServer::ICallback::Pointer cb,
-                                   IHttpServer::Type type, int port,
-                                   const std::string& cert,
+                                   Type type, int port, const std::string& cert,
                                    const std::string& key)
     : http_server_(
           create_server(type, port, http_request_callback, this, cert, key)),
@@ -125,19 +122,30 @@ MicroHttpdServerFactory::MicroHttpdServerFactory(const std::string& cert,
 IHttpServer::Pointer MicroHttpdServerFactory::create(
     IHttpServer::ICallback::Pointer cb, const std::string&,
     IHttpServer::Type type, int port) {
+  return std::make_unique<MicroHttpdServer>(
+      cb,
+      type == IHttpServer::Type::Authorization
+          ? MicroHttpdServer::Type::SingleThreaded
+          : MicroHttpdServer::Type::MultiThreaded,
+      port, cert_, key_);
+}
+
+IHttpServer::Pointer MicroHttpdServerFactory::create(
+    IHttpServer::ICallback::Pointer cb, const std::string& session_id,
+    MicroHttpdServer::Type type, int port) {
   return std::make_unique<MicroHttpdServer>(cb, type, port, cert_, key_);
 }
 
-DaemonPtr create_server(IHttpServer::Type type, int port,
+DaemonPtr create_server(MicroHttpdServer::Type type, int port,
                         MHD_AccessHandlerCallback callback, void* data,
                         const std::string& cert, const std::string& key) {
   MHD_Daemon* daemon =
       cert.empty()
-          ? MHD_start_daemon(type == IHttpServer::Type::SingleThreaded
+          ? MHD_start_daemon(type == MicroHttpdServer::Type::SingleThreaded
                                  ? MHD_USE_POLL_INTERNALLY
                                  : MHD_USE_THREAD_PER_CONNECTION,
                              port, NULL, NULL, callback, data, MHD_OPTION_END)
-          : MHD_start_daemon((type == IHttpServer::Type::SingleThreaded
+          : MHD_start_daemon((type == MicroHttpdServer::Type::SingleThreaded
                                   ? MHD_USE_POLL_INTERNALLY
                                   : MHD_USE_THREAD_PER_CONNECTION) |
                                  MHD_USE_SSL,
@@ -147,5 +155,3 @@ DaemonPtr create_server(IHttpServer::Type type, int port,
                              MHD_OPTION_END);
   return DaemonPtr(daemon, [](MHD_Daemon* daemon) { MHD_stop_daemon(daemon); });
 }
-
-}  // namespace cloudstorage

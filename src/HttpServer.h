@@ -5,9 +5,9 @@
 #include <cloudstorage/ICloudStorage.h>
 #include <json/json.h>
 #include <atomic>
+#include <mutex>
 
 #include "DispatchServer.h"
-#include "GenericRequest.h"
 
 using namespace cloudstorage;
 
@@ -64,10 +64,10 @@ class HttpServer {
    public:
     Callback(HttpCloudProvider* data) : data_(data) {}
 
-    Status userConsentRequired(const ICloudProvider& p);
-    void accepted(const ICloudProvider&);
-    void declined(const ICloudProvider&);
-    void error(const ICloudProvider&, const std::string&);
+    Status userConsentRequired(const ICloudProvider& p) override;
+    void accepted(const ICloudProvider&) override;
+    void declined(const ICloudProvider&) override;
+    void error(const ICloudProvider&, Error) override;
 
    private:
     HttpCloudProvider* data_;
@@ -94,7 +94,7 @@ class HttpServer {
   friend class HttpCloudProvider;
 
   std::unordered_map<std::string, HttpCloudProvider::Pointer> data_;
-  IHttpServerFactory::Pointer server_factory_;
+  MicroHttpdServerFactory::Pointer server_factory_;
   IHttpServer::Pointer main_server_;
   CloudConfig config_;
   mutable std::mutex lock_;

@@ -28,14 +28,15 @@
 
 #include "cloudstorage/IHttpServer.h"
 
-namespace cloudstorage {
-
 using DaemonPtr = std::unique_ptr<MHD_Daemon, void (*)(MHD_Daemon*)>;
+using namespace cloudstorage;
 
 class MicroHttpdServer : public IHttpServer {
  public:
-  MicroHttpdServer(IHttpServer::ICallback::Pointer cb, IHttpServer::Type type,
-                   int port, const std::string& cert, const std::string& key);
+  enum class Type { SingleThreaded, MultiThreaded };
+
+  MicroHttpdServer(IHttpServer::ICallback::Pointer cb, Type type, int port,
+                   const std::string& cert, const std::string& key);
 
   class Response : public IResponse {
    public:
@@ -88,21 +89,24 @@ class MicroHttpdServer : public IHttpServer {
 
 class MicroHttpdServerFactory : public IHttpServerFactory {
  public:
+  using Pointer = std::shared_ptr<MicroHttpdServerFactory>;
+
   MicroHttpdServerFactory(const std::string& cert, const std::string& key);
 
   IHttpServer::Pointer create(IHttpServer::ICallback::Pointer,
                               const std::string& session_id, IHttpServer::Type,
                               int port) override;
+  IHttpServer::Pointer create(IHttpServer::ICallback::Pointer,
+                              const std::string& session_id,
+                              MicroHttpdServer::Type, int port);
 
  private:
   std::string cert_;
   std::string key_;
 };
 
-DaemonPtr create_server(IHttpServer::Type type, int port,
+DaemonPtr create_server(MicroHttpdServer::Type type, int port,
                         MHD_AccessHandlerCallback, void* data,
                         const std::string& cert, const std::string& key);
-
-}  // namespace cloudstorage
 
 #endif  // MICRO_HTTPD_SERVER_H

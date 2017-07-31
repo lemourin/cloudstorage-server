@@ -4,6 +4,8 @@
 #include <iostream>
 #include <sstream>
 
+#include "Utility.h"
+
 using namespace std::string_literals;
 
 namespace {
@@ -19,6 +21,21 @@ Json::Value finalize_request(Request request) {
   return request->result();
 }
 
+std::string file_type_to_string(IItem::FileType type) {
+  switch (type) {
+    case IItem::FileType::Audio:
+      return "audio";
+    case IItem::FileType::Directory:
+      return "directory";
+    case IItem::FileType::Image:
+      return "image";
+    case IItem::FileType::Unknown:
+      return "unknown";
+    case IItem::FileType::Video:
+      return "video";
+  }
+}
+
 }  // namespace
 
 CloudConfig::CloudConfig(const Json::Value& config,
@@ -31,7 +48,7 @@ CloudConfig::CloudConfig(const Json::Value& config,
       youtube_dl_url_(config["youtube_dl_url"].asString()),
       keys_(config["keys"]),
       file_daemon_(
-          DispatchServer(f, IHttpServer::Type::MultiThreaded, daemon_port_)) {}
+          DispatchServer(f, IHttpServer::Type::FileProvider, daemon_port_)) {}
 
 std::unique_ptr<ICloudProvider::Hints> CloudConfig::hints(
     const std::string& provider) const {
@@ -67,7 +84,6 @@ HttpServer::ConnectionCallback::receivedConnection(
       } else if (c.url() == "/get_item_data"s) {
         result = p->get_item_data(c);
       } else if (c.url() == "/thumbnail"s) {
-        result["error"] = "unimplemented";
       }
     } else {
       if (c.url() == "/list_providers"s) result = server_->list_providers(c);
@@ -84,7 +100,7 @@ HttpServer::HttpServer(Json::Value config)
           read_file(config["ssl_key"].asString()))),
       main_server_(server_factory_->create(
           std::make_unique<ConnectionCallback>(this), "",
-          IHttpServer::Type::MultiThreaded, config["port"].asInt())),
+          MicroHttpdServer::Type::MultiThreaded, config["port"].asInt())),
       config_(config, server_factory_) {}
 
 ICloudProvider::ICallback::Status HttpServer::Callback::userConsentRequired(
@@ -103,10 +119,9 @@ void HttpServer::Callback::declined(const ICloudProvider& p) {
   std::cerr << "declined " << p.name() << "\n";
 }
 
-void HttpServer::Callback::error(const ICloudProvider& p,
-                                 const std::string& d) {
+void HttpServer::Callback::error(const ICloudProvider& p, Error e) {
   data_->set_status(HttpCloudProvider::Status::Denied);
-  std::cerr << "error " << d << "\n";
+  std::cerr << "error " << e.description_ << "\n";
 }
 
 ICloudProvider::Pointer HttpCloudProvider::provider(
@@ -145,8 +160,12 @@ Json::Value HttpCloudProvider::exchange_code(
     return result;
   }
   auto token = provider->exchangeCodeAsync(code)->result();
-  result["token"] = token;
-  result["provider"] = provider->name();
+  if (token.right()) {
+    result["token"] = *token.right();
+    result["provider"] = provider->name();
+  } else {
+    result["error"] = token.left()->description_;
+  }
   return result;
 }
 
@@ -158,9 +177,38 @@ Json::Value HttpCloudProvider::list_directory(
     result["error"] = "missing item id"s;
     return result;
   }
-  auto request =
-      std::make_shared<ListDirectoryRequest>(provider(connection), item_id);
-  return finalize_request(request);
+  auto p = provider(connection);
+  if (!p) {
+    result["error"] = "invalid provider";
+    return result;
+  }
+  auto item = item_id == "root"s ? p->rootDirectory()
+                                 : p->getItemDataAsync(item_id)->result();
+  if (item.left()) {
+    result["error"] = item.left()->description_;
+    result["consent_url"] = p->authorizeLibraryUrl();
+    std::cerr << "error " << item.left()->code_ << ": "
+              << item.left()->description_ << "\n";
+    return result;
+  }
+  Json::Value array(Json::arrayValue);
+  auto list = p->listDirectoryAsync(item.right())->result();
+  if (list.right()) {
+    for (auto i : *list.right()) {
+      Json::Value v;
+      v["id"] = i->id();
+      v["filename"] = i->filename();
+      v["type"] = file_type_to_string(i->type());
+      array.append(v);
+    }
+    result["items"] = array;
+  } else {
+    result["error"] = list.left()->description_;
+    result["consent_url"] = p->authorizeLibraryUrl();
+    std::cerr << "error " << list.left()->code_ << ": "
+              << list.left()->description_ << "\n";
+  }
+  return result;
 }
 
 Json::Value HttpCloudProvider::get_item_data(
@@ -171,9 +219,23 @@ Json::Value HttpCloudProvider::get_item_data(
     result["error"] = "missing item id"s;
     return result;
   }
-  auto request =
-      std::make_shared<GetItemDataRequest>(provider(connection), item_id);
-  return finalize_request(request);
+  auto p = provider(connection);
+  if (!p) {
+    result["error"] = "missing provider";
+    return result;
+  }
+  auto item = p->getItemDataAsync(item_id)->result();
+  if (item.left()) {
+    result["error"] = item.left()->description_;
+    result["consent_url"] = p->authorizeLibraryUrl();
+    std::cerr << "error while getting " << item_id << ", provider=" << p->name()
+              << " " << item.left()->code_ << ": " << item.left()->description_
+              << "\n";
+    return result;
+  } else {
+    result["url"] = item.right()->url();
+  }
+  return result;
 }
 
 Json::Value HttpServer::list_providers(
@@ -183,7 +245,7 @@ Json::Value HttpServer::list_providers(
   auto p = ICloudStorage::create()->providers();
   uint32_t idx = 0;
   Json::Value array(Json::arrayValue);
-  for (auto t : p)
+  for (auto t : p) {
     if (auto hints = config_.hints(t->name())) {
       ICloudProvider::InitData data;
       hints->insert({"state", key + " "s + t->name()});
@@ -194,6 +256,7 @@ Json::Value HttpServer::list_providers(
       v["url"] = t->authorizeLibraryUrl();
       array.append(v);
     }
+  }
   result["providers"] = array;
   return result;
 }

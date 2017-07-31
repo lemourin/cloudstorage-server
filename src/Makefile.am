@@ -13,7 +13,6 @@ bin_PROGRAMS = main
 main_SOURCES = \
 	main.cpp \
 	Utility.cpp \
-	GenericRequest.cpp \
 	HttpServer.cpp \
 	DispatchServer.cpp \
 	MicroHttpdServer.cpp
