@@ -40,11 +40,21 @@ class HttpCloudProvider {
 
   ICloudProvider::Pointer provider(const IHttpServer::IConnection& connection);
 
-  Json::Value exchange_code(const IHttpServer::IConnection& connection);
+  EitherError<IItem> item(ICloudProvider::Pointer p,
+                          const IHttpServer::IConnection& connection);
 
-  Json::Value list_directory(const IHttpServer::IConnection& connection);
+  Json::Value exchange_code(ICloudProvider::Pointer p,
+                            const IHttpServer::IConnection& connection);
 
-  Json::Value get_item_data(const IHttpServer::IConnection& connection);
+  Json::Value list_directory(ICloudProvider::Pointer p,
+                             const IHttpServer::IConnection& connection);
+
+  Json::Value get_item_data(ICloudProvider::Pointer p,
+                            const IHttpServer::IConnection& connection);
+
+  IHttpServer::IResponse::Pointer thumbnail(
+      ICloudProvider::Pointer p, const IHttpServer&,
+      const IHttpServer::IConnection& connection);
 
   std::mutex& lock() const { return lock_; }
 
@@ -60,9 +70,9 @@ class HttpCloudProvider {
 
 class HttpServer {
  public:
-  class Callback : public ICloudProvider::IAuthCallback {
+  class AuthCallback : public ICloudProvider::IAuthCallback {
    public:
-    Callback(HttpCloudProvider* data) : data_(data) {}
+    AuthCallback(HttpCloudProvider* data) : data_(data) {}
 
     Status userConsentRequired(const ICloudProvider& p) override;
     void done(const ICloudProvider&, EitherError<void>) override;
