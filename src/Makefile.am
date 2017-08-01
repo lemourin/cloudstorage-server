@@ -3,6 +3,7 @@ ACLOCAL_AMFLAGS = -I m4
 AM_CXXFLAGS = \
 	$(libjsoncpp_CFLAGS) \
 	$(libmicrohttpd_CFLAGS) \
+	$(libffmpegthumbnailer_CFLAGS) \
 	$(libcloudstorage_CFLAGS)
 
 AM_LDFLAGS = \
@@ -15,10 +16,12 @@ main_SOURCES = \
 	Utility.cpp \
 	HttpServer.cpp \
 	DispatchServer.cpp \
-	MicroHttpdServer.cpp
+	MicroHttpdServer.cpp \
+	FFmpegThumbnailer.cpp
 
 main_LDADD = \
 	$(libjsoncpp_LIBS) \
 	$(libmicrohttpd_LIBS) \
+	$(libffmpegthumbnailer_LIBS) \
 	$(libcloudstorage_LIBS)
 

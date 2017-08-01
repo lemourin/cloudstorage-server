@@ -6,6 +6,7 @@
 #include <queue>
 #include <sstream>
 
+#include "FFmpegThumbnailer.h"
 #include "Utility.h"
 
 using namespace std::string_literals;
@@ -156,6 +157,7 @@ ICloudProvider::Pointer HttpCloudProvider::provider(
     data.hints_ = *config_.hints(provider);
     if (access_token) data.hints_["access_token"] = access_token;
     data.hints_["state"] = key_;
+    data.thumbnailer_ = std::make_unique<FFmpegThumbnailer>();
     data.callback_ = std::make_unique<HttpServer::AuthCallback>(this);
     provider_->initialize(std::move(data));
   }

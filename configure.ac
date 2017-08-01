@@ -13,6 +13,7 @@ AX_CXX_COMPILE_STDCXX([14], [noext], [mandatory])
 PKG_CHECK_MODULES([libjsoncpp], [jsoncpp])
 PKG_CHECK_MODULES([libmicrohttpd], [libmicrohttpd])
 PKG_CHECK_MODULES([libcloudstorage], [libcloudstorage])
+PKG_CHECK_MODULES([libffmpegthumbnailer], [libffmpegthumbnailer])
 
 case "${host_os}" in
   *mingw32*)
