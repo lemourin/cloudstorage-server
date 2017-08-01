@@ -20,7 +20,7 @@ class DispatchServer {
   class Callback : public IHttpServer::ICallback {
    public:
     IHttpServer::IResponse::Pointer receivedConnection(
-        const IHttpServer&, const IHttpServer::IConnection&) override;
+        const IHttpServer&, IHttpServer::IConnection::Pointer) override;
 
     void addCallback(const std::string&, ICallback::Pointer);
     void removeCallback(const std::string&);

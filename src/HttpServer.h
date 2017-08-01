@@ -86,7 +86,7 @@ class HttpServer {
     ConnectionCallback(HttpServer* server) : server_(server) {}
 
     IHttpServer::IResponse::Pointer receivedConnection(
-        const IHttpServer&, const IHttpServer::IConnection&) override;
+        const IHttpServer&, IHttpServer::IConnection::Pointer) override;
 
    private:
     HttpServer* server_;

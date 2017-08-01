@@ -28,13 +28,22 @@ namespace {
 int http_request_callback(void* cls, MHD_Connection* c, const char* url,
                           const char* /*method*/, const char* /*version*/,
                           const char* /*upload_data*/,
-                          size_t* /*upload_data_size*/, void** /*ptr*/) {
+                          size_t* /*upload_data_size*/, void** con_cls) {
   MicroHttpdServer* server = static_cast<MicroHttpdServer*>(cls);
-  MicroHttpdServer::Connection connection(c, url);
-  auto response = server->callback()->receivedConnection(*server, connection);
-  response->send(connection);
-  return static_cast<const MicroHttpdServer::Response*>(response.get())
-      ->result();
+  auto connection = std::make_unique<MicroHttpdServer::Connection>(c, url);
+  auto response =
+      server->callback()->receivedConnection(*server, connection.get());
+  auto p = static_cast<MicroHttpdServer::Response*>(response.get());
+  int ret = MHD_queue_response(c, p->code(), p->response());
+  *con_cls = connection.release();
+  return ret;
+}
+
+void http_request_completed(void*, MHD_Connection*, void** con_cls,
+                            MHD_RequestTerminationCode) {
+  auto p = static_cast<MicroHttpdServer::Connection*>(*con_cls);
+  if (p->callback()) p->callback()();
+  delete p;
 }
 
 }  // namespace
@@ -44,7 +53,6 @@ MicroHttpdServer::Response::Response(int code,
                                      const std::string& body)
     : response_(MHD_create_response_from_buffer(
           body.length(), (void*)body.c_str(), MHD_RESPMEM_MUST_COPY)),
-      result_(),
       code_(code) {
   for (auto it : headers)
     MHD_add_response_header(response_, it.first.c_str(), it.second.c_str());
@@ -52,11 +60,6 @@ MicroHttpdServer::Response::Response(int code,
 
 MicroHttpdServer::Response::~Response() {
   if (response_) MHD_destroy_response(response_);
-}
-
-void MicroHttpdServer::Response::send(const IConnection& c) {
-  MHD_Connection* connection = static_cast<const Connection&>(c).connection();
-  result_ = MHD_queue_response(connection, code_, response_);
 }
 
 MicroHttpdServer::CallbackResponse::CallbackResponse(
@@ -95,11 +98,23 @@ const char* MicroHttpdServer::Connection::header(
 
 std::string MicroHttpdServer::Connection::url() const { return url_; }
 
+void MicroHttpdServer::Connection::onCompleted(CompletedCallback f) {
+  callback_ = f;
+}
+
+void MicroHttpdServer::Connection::suspend() {
+  MHD_suspend_connection(connection_);
+}
+
+void MicroHttpdServer::Connection::resume() {
+  MHD_resume_connection(connection_);
+}
+
 MicroHttpdServer::MicroHttpdServer(IHttpServer::ICallback::Pointer cb,
                                    Type type, int port, const std::string& cert,
                                    const std::string& key)
-    : http_server_(
-          create_server(type, port, http_request_callback, this, cert, key)),
+    : http_server_(create_server(type, port, http_request_callback,
+                                 http_request_completed, this, cert, key)),
       callback_(cb) {}
 
 MicroHttpdServer::IResponse::Pointer MicroHttpdServer::createResponse(
@@ -120,14 +135,10 @@ MicroHttpdServerFactory::MicroHttpdServerFactory(const std::string& cert,
     : cert_(cert), key_(key) {}
 
 IHttpServer::Pointer MicroHttpdServerFactory::create(
-    IHttpServer::ICallback::Pointer cb, const std::string&,
-    IHttpServer::Type type, int port) {
+    IHttpServer::ICallback::Pointer cb, const std::string&, IHttpServer::Type,
+    int port) {
   return std::make_unique<MicroHttpdServer>(
-      cb,
-      type == IHttpServer::Type::Authorization
-          ? MicroHttpdServer::Type::SingleThreaded
-          : MicroHttpdServer::Type::MultiThreaded,
-      port, cert_, key_);
+      cb, MicroHttpdServer::Type::SingleThreaded, port, cert_, key_);
 }
 
 IHttpServer::Pointer MicroHttpdServerFactory::create(
@@ -137,21 +148,26 @@ IHttpServer::Pointer MicroHttpdServerFactory::create(
 }
 
 DaemonPtr create_server(MicroHttpdServer::Type type, int port,
-                        MHD_AccessHandlerCallback callback, void* data,
-                        const std::string& cert, const std::string& key) {
+                        MHD_AccessHandlerCallback callback,
+                        MHD_RequestCompletedCallback request_callback,
+                        void* data, const std::string& cert,
+                        const std::string& key) {
   MHD_Daemon* daemon =
       cert.empty()
-          ? MHD_start_daemon(type == MicroHttpdServer::Type::SingleThreaded
-                                 ? MHD_USE_POLL_INTERNALLY
-                                 : MHD_USE_THREAD_PER_CONNECTION,
-                             port, NULL, NULL, callback, data, MHD_OPTION_END)
-          : MHD_start_daemon((type == MicroHttpdServer::Type::SingleThreaded
-                                  ? MHD_USE_POLL_INTERNALLY
-                                  : MHD_USE_THREAD_PER_CONNECTION) |
-                                 MHD_USE_SSL,
-                             port, NULL, NULL, callback, data,
-                             MHD_OPTION_HTTPS_MEM_CERT, cert.c_str(),
-                             MHD_OPTION_HTTPS_MEM_KEY, key.c_str(),
-                             MHD_OPTION_END);
+          ? MHD_start_daemon(
+                type == MicroHttpdServer::Type::SingleThreaded
+                    ? (MHD_USE_POLL_INTERNALLY | MHD_USE_SUSPEND_RESUME)
+                    : MHD_USE_THREAD_PER_CONNECTION,
+                port, NULL, NULL, callback, data, MHD_OPTION_NOTIFY_COMPLETED,
+                http_request_completed, data, MHD_OPTION_END)
+          : MHD_start_daemon(
+                (type == MicroHttpdServer::Type::SingleThreaded
+                     ? (MHD_USE_POLL_INTERNALLY | MHD_USE_SUSPEND_RESUME)
+                     : MHD_USE_THREAD_PER_CONNECTION) |
+                    MHD_USE_SSL,
+                port, NULL, NULL, callback, data, MHD_OPTION_NOTIFY_COMPLETED,
+                http_request_completed, data, MHD_OPTION_HTTPS_MEM_CERT,
+                cert.c_str(), MHD_OPTION_HTTPS_MEM_KEY, key.c_str(),
+                MHD_OPTION_END);
   return DaemonPtr(daemon, [](MHD_Daemon* daemon) { MHD_stop_daemon(daemon); });
 }

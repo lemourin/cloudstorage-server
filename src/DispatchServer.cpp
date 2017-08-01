@@ -18,8 +18,8 @@ void DispatchServer::Callback::removeCallback(const std::string& str) {
 }
 
 IHttpServer::IResponse::Pointer DispatchServer::Callback::receivedConnection(
-    const IHttpServer& server, const IHttpServer::IConnection& connection) {
-  const char* state = connection.getParameter("state");
+    const IHttpServer& server, IHttpServer::IConnection::Pointer connection) {
+  const char* state = connection->getParameter("state");
   if (!state || client_callbacks_.find(state) == std::end(client_callbacks_))
     return server.createResponse(404, {}, "missing/invalid state parameter");
   return client_callbacks_.find(state)->second->receivedConnection(server,

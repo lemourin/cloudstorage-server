@@ -44,12 +44,11 @@ class MicroHttpdServer : public IHttpServer {
     Response(int code, const IResponse::Headers&, const std::string& body);
     ~Response();
 
-    void send(const IConnection&) override;
-    int result() const { return result_; }
+    MHD_Response* response() const { return response_; }
+    int code() const { return code_; }
 
    protected:
     MHD_Response* response_;
-    int result_;
     int code_;
   };
 
@@ -64,13 +63,18 @@ class MicroHttpdServer : public IHttpServer {
     Connection(MHD_Connection*, const char* url);
 
     MHD_Connection* connection() const { return connection_; }
+    CompletedCallback callback() const { return callback_; }
 
     const char* getParameter(const std::string& name) const override;
     const char* header(const std::string&) const override;
     std::string url() const override;
+    void onCompleted(CompletedCallback) override;
+    void suspend() override;
+    void resume() override;
 
    private:
     std::string url_;
+    CompletedCallback callback_;
     MHD_Connection* connection_;
   };
 
@@ -106,7 +110,8 @@ class MicroHttpdServerFactory : public IHttpServerFactory {
 };
 
 DaemonPtr create_server(MicroHttpdServer::Type type, int port,
-                        MHD_AccessHandlerCallback, void* data,
-                        const std::string& cert, const std::string& key);
+                        MHD_AccessHandlerCallback, MHD_RequestCompletedCallback,
+                        void* data, const std::string& cert,
+                        const std::string& key);
 
 #endif  // MICRO_HTTPD_SERVER_H

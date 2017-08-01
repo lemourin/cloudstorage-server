@@ -79,31 +79,31 @@ std::unique_ptr<ICloudProvider::Hints> CloudConfig::hints(
 
 IHttpServer::IResponse::Pointer
 HttpServer::ConnectionCallback::receivedConnection(
-    const IHttpServer& d, const IHttpServer::IConnection& c) {
-  std::cerr << "got request " << c.url() << "\n";
+    const IHttpServer& d, IHttpServer::IConnection::Pointer c) {
+  std::cerr << "got request " << c->url() << "\n";
   Json::Value result;
-  const char* key = c.getParameter("key");
+  const char* key = c->getParameter("key");
   if (!key) {
     result["error"] = "missing key";
   } else {
-    const char* provider = c.getParameter("provider");
+    const char* provider = c->getParameter("provider");
     if (provider) {
       auto p = server_->provider(key + SEPARATOR + provider);
-      auto r = p->provider(c);
+      auto r = p->provider(*c);
       if (!r) {
         result["error"] = "invalid provider";
-      } else if (c.url() == "/exchange_code"s) {
-        result = p->exchange_code(r, c);
-      } else if (c.url() == "/list_directory"s) {
-        result = p->list_directory(r, c);
-      } else if (c.url() == "/get_item_data"s) {
-        result = p->get_item_data(r, c);
-      } else if (c.url() == "/thumbnail"s) {
-        return p->thumbnail(r, d, c);
+      } else if (c->url() == "/exchange_code"s) {
+        result = p->exchange_code(r, *c);
+      } else if (c->url() == "/list_directory"s) {
+        result = p->list_directory(r, *c);
+      } else if (c->url() == "/get_item_data"s) {
+        result = p->get_item_data(r, *c);
+      } else if (c->url() == "/thumbnail"s) {
+        return p->thumbnail(r, d, *c);
       }
     } else {
-      if (c.url() == "/list_providers"s)
-        result = server_->list_providers(c);
+      if (c->url() == "/list_providers"s)
+        result = server_->list_providers(*c);
       else
         result["error"] = "invalid request";
     }
