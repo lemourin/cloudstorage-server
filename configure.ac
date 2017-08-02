@@ -14,6 +14,7 @@ PKG_CHECK_MODULES([libjsoncpp], [jsoncpp])
 PKG_CHECK_MODULES([libmicrohttpd], [libmicrohttpd])
 PKG_CHECK_MODULES([libcloudstorage], [libcloudstorage])
 PKG_CHECK_MODULES([libffmpegthumbnailer], [libffmpegthumbnailer])
+PKG_CHECK_MODULES([libcrypto], [libcrypto])
 
 case "${host_os}" in
   *mingw32*)

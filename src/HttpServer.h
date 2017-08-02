@@ -52,9 +52,10 @@ class HttpCloudProvider {
   Json::Value get_item_data(ICloudProvider::Pointer p,
                             const IHttpServer::IConnection& connection);
 
-  IHttpServer::IResponse::Pointer thumbnail(
-      ICloudProvider::Pointer p, const IHttpServer&,
-      const IHttpServer::IConnection& connection);
+  Json::Value thumbnail(ICloudProvider::Pointer p,
+                        const IHttpServer::IConnection& connection);
+
+  Json::Value error(ICloudProvider::Pointer p, Error) const;
 
   std::mutex& lock() const { return lock_; }
 

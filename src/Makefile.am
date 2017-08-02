@@ -4,7 +4,8 @@ AM_CXXFLAGS = \
 	$(libjsoncpp_CFLAGS) \
 	$(libmicrohttpd_CFLAGS) \
 	$(libffmpegthumbnailer_CFLAGS) \
-	$(libcloudstorage_CFLAGS)
+	$(libcloudstorage_CFLAGS) \
+	$(libcrypto_CFLAGS)
 
 AM_LDFLAGS = \
 	-no-undefined \
@@ -16,12 +17,12 @@ main_SOURCES = \
 	Utility.cpp \
 	HttpServer.cpp \
 	DispatchServer.cpp \
-	MicroHttpdServer.cpp \
-	FFmpegThumbnailer.cpp
+	MicroHttpdServer.cpp
 
 main_LDADD = \
 	$(libjsoncpp_LIBS) \
 	$(libmicrohttpd_LIBS) \
 	$(libffmpegthumbnailer_LIBS) \
-	$(libcloudstorage_LIBS)
+	$(libcloudstorage_LIBS) \
+	$(libcrypto_LIBS)
 
