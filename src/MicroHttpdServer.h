@@ -98,11 +98,11 @@ class MicroHttpdServerFactory : public IHttpServerFactory {
   MicroHttpdServerFactory(const std::string& cert, const std::string& key);
 
   IHttpServer::Pointer create(IHttpServer::ICallback::Pointer,
-                              const std::string& session_id, IHttpServer::Type,
-                              int port) override;
+                              const std::string& session_id,
+                              IHttpServer::Type) override;
   IHttpServer::Pointer create(IHttpServer::ICallback::Pointer,
                               const std::string& session_id,
-                              MicroHttpdServer::Type, int port);
+                              MicroHttpdServer::Type, uint16_t port);
 
  private:
   std::string cert_;

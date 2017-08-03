@@ -12,7 +12,7 @@ using cloudstorage::IHttpServerFactory;
 
 class DispatchServer {
  public:
-  DispatchServer(IHttpServerFactory::Pointer, IHttpServer::Type, int port);
+  DispatchServer(MicroHttpdServerFactory::Pointer, uint16_t port);
 
  private:
   friend class ServerWrapper;
@@ -55,8 +55,8 @@ class ServerWrapperFactory : public IHttpServerFactory {
   ServerWrapperFactory(DispatchServer);
 
   IHttpServer::Pointer create(IHttpServer::ICallback::Pointer,
-                              const std::string& session_id, IHttpServer::Type,
-                              int port) override;
+                              const std::string& session_id,
+                              IHttpServer::Type) override;
 
  private:
   DispatchServer server_;

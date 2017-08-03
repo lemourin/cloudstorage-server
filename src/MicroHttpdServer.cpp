@@ -135,15 +135,13 @@ MicroHttpdServerFactory::MicroHttpdServerFactory(const std::string& cert,
     : cert_(cert), key_(key) {}
 
 IHttpServer::Pointer MicroHttpdServerFactory::create(
-    IHttpServer::ICallback::Pointer cb, const std::string&, IHttpServer::Type,
-    int port) {
-  return std::make_unique<MicroHttpdServer>(
-      cb, MicroHttpdServer::Type::SingleThreaded, port, cert_, key_);
+    IHttpServer::ICallback::Pointer, const std::string&, IHttpServer::Type) {
+  return nullptr;
 }
 
 IHttpServer::Pointer MicroHttpdServerFactory::create(
     IHttpServer::ICallback::Pointer cb, const std::string& session_id,
-    MicroHttpdServer::Type type, int port) {
+    MicroHttpdServer::Type type, uint16_t port) {
   return std::make_unique<MicroHttpdServer>(cb, type, port, cert_, key_);
 }
 

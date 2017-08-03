@@ -2,10 +2,11 @@
 
 #include <iostream>
 
-DispatchServer::DispatchServer(IHttpServerFactory::Pointer f,
-                               IHttpServer::Type type, int port)
+DispatchServer::DispatchServer(MicroHttpdServerFactory::Pointer f,
+                               uint16_t port)
     : callback_(std::make_shared<Callback>()),
-      http_server_(f->create(callback_, "", type, port)) {}
+      http_server_(f->create(callback_, "",
+                             MicroHttpdServer::Type::SingleThreaded, port)) {}
 
 void DispatchServer::Callback::addCallback(const std::string& str,
                                            ICallback::Pointer cb) {
@@ -52,6 +53,6 @@ ServerWrapperFactory::ServerWrapperFactory(DispatchServer server)
 
 IHttpServer::Pointer ServerWrapperFactory::create(
     IHttpServer::ICallback::Pointer cb, const std::string& session,
-    IHttpServer::Type, int port) {
+    IHttpServer::Type) {
   return std::make_unique<ServerWrapper>(server_, session, std::move(cb));
 }

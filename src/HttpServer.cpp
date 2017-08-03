@@ -52,16 +52,13 @@ Json::Value tokens(ICloudProvider::Pointer p) {
 }  // namespace
 
 CloudConfig::CloudConfig(const Json::Value& config,
-                         IHttpServerFactory::Pointer f)
+                         MicroHttpdServerFactory::Pointer f)
     : auth_url_(config["auth_url"].asString()),
-      auth_port_(config["auth_port"].asInt()),
       file_url_(config["file_url"].asString()),
       daemon_port_(config["daemon_port"].asInt()),
-      public_daemon_port_(config["public_daemon_port"].asInt()),
       youtube_dl_url_(config["youtube_dl_url"].asString()),
       keys_(config["keys"]),
-      file_daemon_(
-          DispatchServer(f, IHttpServer::Type::FileProvider, daemon_port_)) {}
+      file_daemon_(DispatchServer(f, daemon_port_)) {}
 
 std::unique_ptr<ICloudProvider::Hints> CloudConfig::hints(
     const std::string& provider) const {
@@ -71,9 +68,7 @@ std::unique_ptr<ICloudProvider::Hints> CloudConfig::hints(
   hints["youtube_dl_url"] = youtube_dl_url_;
   hints["client_id"] = keys_[provider]["client_id"].asString();
   hints["client_secret"] = keys_[provider]["client_secret"].asString();
-  hints["redirect_uri_host"] = auth_url_;
-  hints["redirect_uri_port"] = std::to_string(auth_port_);
-  hints["daemon_port"] = std::to_string(public_daemon_port_);
+  hints["redirect_uri"] = auth_url_;
   hints["file_url"] = file_url_;
   return p;
 }
