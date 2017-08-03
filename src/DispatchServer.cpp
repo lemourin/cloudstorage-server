@@ -10,10 +10,12 @@ DispatchServer::DispatchServer(MicroHttpdServerFactory::Pointer f,
 
 void DispatchServer::Callback::addCallback(const std::string& str,
                                            ICallback::Pointer cb) {
+  std::lock_guard<std::mutex> lock(lock_);
   client_callbacks_[str] = std::move(cb);
 }
 
 void DispatchServer::Callback::removeCallback(const std::string& str) {
+  std::lock_guard<std::mutex> lock(lock_);
   auto it = client_callbacks_.find(str);
   if (it != std::end(client_callbacks_)) client_callbacks_.erase(it);
 }

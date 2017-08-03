@@ -1,8 +1,8 @@
 #ifndef DISPATCH_SERVER_H
 #define DISPATCH_SERVER_H
 
-#include <microhttpd.h>
 #include <memory>
+#include <mutex>
 
 #include "MicroHttpdServer.h"
 #include "cloudstorage/IHttpServer.h"
@@ -27,6 +27,7 @@ class DispatchServer {
 
    private:
     std::unordered_map<std::string, ICallback::Pointer> client_callbacks_;
+    std::mutex lock_;
   };
 
   std::shared_ptr<Callback> callback_;
