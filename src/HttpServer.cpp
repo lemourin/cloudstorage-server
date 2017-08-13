@@ -47,6 +47,7 @@ Json::Value tokens(ICloudProvider::Pointer p) {
   auto hints = p->hints();
   auto it = hints.find("access_token");
   if (it != std::end(hints)) result["access_token"] = it->second;
+  result["provider"] = p->name();
   return result;
 }
 
