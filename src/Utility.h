@@ -43,6 +43,8 @@ void log(Args&&... t) {
   std::cerr << std::endl;
 }
 
+void enqueue(std::function<void()> f);
+
 }  // namespace util
 
 #endif  // UTILITY_H

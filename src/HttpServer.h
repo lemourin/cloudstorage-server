@@ -30,6 +30,8 @@ struct CloudConfig {
 class HttpCloudProvider {
  public:
   using Pointer = std::shared_ptr<HttpCloudProvider>;
+  using Completed = std::function<void(Json::Value)>;
+  using CompletedItem = std::function<void(EitherError<IItem>)>;
 
   enum class Status { Accepted, Denied };
 
@@ -38,24 +40,22 @@ class HttpCloudProvider {
 
   ICloudProvider::Pointer provider(const IHttpServer::IConnection& connection);
 
-  EitherError<IItem> item(ICloudProvider::Pointer p,
-                          const IHttpServer::IConnection& connection);
+  void item(ICloudProvider::Pointer p,
+            const IHttpServer::IConnection& connection, CompletedItem);
 
-  Json::Value exchange_code(ICloudProvider::Pointer p,
-                            const IHttpServer::IConnection& connection);
+  void exchange_code(ICloudProvider::Pointer p,
+                     const IHttpServer::IConnection& connection, Completed);
 
-  Json::Value list_directory(ICloudProvider::Pointer p,
-                             const IHttpServer::IConnection& connection);
+  void list_directory(ICloudProvider::Pointer p,
+                      const IHttpServer::IConnection& connection, Completed);
 
-  Json::Value get_item_data(ICloudProvider::Pointer p,
-                            const IHttpServer::IConnection& connection);
+  void get_item_data(ICloudProvider::Pointer p,
+                     const IHttpServer::IConnection& connection, Completed);
 
-  Json::Value thumbnail(ICloudProvider::Pointer p,
-                        const IHttpServer::IConnection& connection);
+  void thumbnail(ICloudProvider::Pointer p,
+                 const IHttpServer::IConnection& connection, Completed);
 
-  Json::Value error(ICloudProvider::Pointer p, Error) const;
-
-  std::mutex& lock() const { return lock_; }
+  static Json::Value error(ICloudProvider::Pointer p, Error);
 
   void set_status(Status s) { status_ = s; }
 
