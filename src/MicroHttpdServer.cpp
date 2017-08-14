@@ -82,7 +82,7 @@ MicroHttpdServer::CallbackResponse::CallbackResponse(
 }
 
 MicroHttpdServer::Connection::Connection(MHD_Connection* c, const char* url)
-    : connection_(c), url_(url) {}
+    : url_(url), connection_(c) {}
 
 const char* MicroHttpdServer::Connection::getParameter(
     const std::string& name) const {
@@ -140,7 +140,7 @@ IHttpServer::Pointer MicroHttpdServerFactory::create(
 }
 
 IHttpServer::Pointer MicroHttpdServerFactory::create(
-    IHttpServer::ICallback::Pointer cb, const std::string& session_id,
+    IHttpServer::ICallback::Pointer cb, const std::string&,
     MicroHttpdServer::Type type, uint16_t port) {
   return std::make_unique<MicroHttpdServer>(cb, type, port, cert_, key_);
 }
@@ -157,8 +157,8 @@ DaemonPtr create_server(MicroHttpdServer::Type type, int port,
                                     MHD_USE_SUSPEND_RESUME)
                                  : MHD_USE_THREAD_PER_CONNECTION,
                              port, NULL, NULL, callback, data,
-                             MHD_OPTION_NOTIFY_COMPLETED,
-                             http_request_completed, data, MHD_OPTION_END)
+                             MHD_OPTION_NOTIFY_COMPLETED, request_callback,
+                             data, MHD_OPTION_END)
           : MHD_start_daemon(
                 (type == MicroHttpdServer::Type::SingleThreaded
                      ? (MHD_USE_EPOLL_INTERNALLY_LINUX_ONLY |
@@ -166,8 +166,7 @@ DaemonPtr create_server(MicroHttpdServer::Type type, int port,
                      : MHD_USE_THREAD_PER_CONNECTION) |
                     MHD_USE_SSL,
                 port, NULL, NULL, callback, data, MHD_OPTION_NOTIFY_COMPLETED,
-                http_request_completed, data, MHD_OPTION_HTTPS_MEM_CERT,
-                cert.c_str(), MHD_OPTION_HTTPS_MEM_KEY, key.c_str(),
-                MHD_OPTION_END);
+                request_callback, data, MHD_OPTION_HTTPS_MEM_CERT, cert.c_str(),
+                MHD_OPTION_HTTPS_MEM_KEY, key.c_str(), MHD_OPTION_END);
   return DaemonPtr(daemon, [](MHD_Daemon* daemon) { MHD_stop_daemon(daemon); });
 }

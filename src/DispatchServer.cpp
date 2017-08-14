@@ -31,7 +31,7 @@ IHttpServer::IResponse::Pointer DispatchServer::Callback::receivedConnection(
 
 ServerWrapper::ServerWrapper(DispatchServer server, const std::string& session,
                              IHttpServer::ICallback::Pointer cb)
-    : server_(server), session_(session) {
+    : session_(session), server_(server) {
   server_.callback_->addCallback(session, std::move(cb));
 }
 

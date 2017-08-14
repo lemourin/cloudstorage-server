@@ -15,10 +15,6 @@ namespace util {
 
 namespace {
 
-bool is_base64(unsigned char c) {
-  return (isalnum(c) || (c == '+') || (c == '/'));
-}
-
 struct Worker {
   Worker()
       : done_(false), thread_([=] {

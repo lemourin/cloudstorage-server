@@ -38,6 +38,8 @@ std::string file_type_to_string(IItem::FileType type) {
       return "unknown";
     case IItem::FileType::Video:
       return "video";
+    default:
+      return "invalid";
   }
 }
 
@@ -336,7 +338,6 @@ Json::Value HttpServer::list_providers(
   Json::Value result;
   const char* key = connection.getParameter("key");
   auto p = ICloudStorage::create()->providers();
-  uint32_t idx = 0;
   Json::Value array(Json::arrayValue);
   for (auto t : p) {
     if (auto hints = config_.hints(t->name())) {
