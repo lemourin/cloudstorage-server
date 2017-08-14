@@ -9,7 +9,7 @@ const std::string base64_chars =
     "abcdefghijklmnopqrstuvwxyz"
     "0123456789+/";
 
-const int WORKER_CNT = 1;
+const int WORKER_CNT = 4;
 
 namespace util {
 

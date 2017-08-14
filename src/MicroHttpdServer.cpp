@@ -152,15 +152,17 @@ DaemonPtr create_server(MicroHttpdServer::Type type, int port,
                         const std::string& key) {
   MHD_Daemon* daemon =
       cert.empty()
-          ? MHD_start_daemon(
-                type == MicroHttpdServer::Type::SingleThreaded
-                    ? (MHD_USE_POLL_INTERNALLY | MHD_USE_SUSPEND_RESUME)
-                    : MHD_USE_THREAD_PER_CONNECTION,
-                port, NULL, NULL, callback, data, MHD_OPTION_NOTIFY_COMPLETED,
-                http_request_completed, data, MHD_OPTION_END)
+          ? MHD_start_daemon(type == MicroHttpdServer::Type::SingleThreaded
+                                 ? (MHD_USE_EPOLL_INTERNALLY_LINUX_ONLY |
+                                    MHD_USE_SUSPEND_RESUME)
+                                 : MHD_USE_THREAD_PER_CONNECTION,
+                             port, NULL, NULL, callback, data,
+                             MHD_OPTION_NOTIFY_COMPLETED,
+                             http_request_completed, data, MHD_OPTION_END)
           : MHD_start_daemon(
                 (type == MicroHttpdServer::Type::SingleThreaded
-                     ? (MHD_USE_POLL_INTERNALLY | MHD_USE_SUSPEND_RESUME)
+                     ? (MHD_USE_EPOLL_INTERNALLY_LINUX_ONLY |
+                        MHD_USE_SUSPEND_RESUME)
                      : MHD_USE_THREAD_PER_CONNECTION) |
                     MHD_USE_SSL,
                 port, NULL, NULL, callback, data, MHD_OPTION_NOTIFY_COMPLETED,
