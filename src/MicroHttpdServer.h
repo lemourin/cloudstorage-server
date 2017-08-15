@@ -84,7 +84,7 @@ class MicroHttpdServer : public IHttpServer {
       int code, const IResponse::Headers&, int size, int chunk_size,
       IResponse::ICallback::Pointer) const override;
 
-  ICallback::Pointer callback() const { return callback_; }
+  ICallback::Pointer callback() const override { return callback_; }
 
  private:
   DaemonPtr http_server_;

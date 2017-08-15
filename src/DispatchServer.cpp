@@ -50,6 +50,10 @@ IHttpServer::IResponse::Pointer ServerWrapper::createResponse(
                                               std::move(cb));
 }
 
+IHttpServer::ICallback::Pointer ServerWrapper::callback() const {
+  return server_.http_server_->callback();
+}
+
 ServerWrapperFactory::ServerWrapperFactory(DispatchServer server)
     : server_(server) {}
 

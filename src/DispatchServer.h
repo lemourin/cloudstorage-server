@@ -46,6 +46,8 @@ class ServerWrapper : public IHttpServer {
       int code, const IResponse::Headers&, int size, int chunk_size,
       IResponse::ICallback::Pointer) const override;
 
+  ICallback::Pointer callback() const override;
+
  private:
   std::string session_;
   DispatchServer server_;
