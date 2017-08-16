@@ -344,6 +344,8 @@ Json::Value HttpServer::list_providers(
       ICloudProvider::InitData data;
       hints->insert({"state", key + SEPARATOR + t->name()});
       data.hints_ = *hints;
+      data.http_server_ = std::make_unique<MicroHttpdServerFactory>("", "");
+      data.http_engine_ = std::make_unique<CurlHttp>();
       t->initialize(std::move(data));
       Json::Value v;
       v["name"] = t->name();
