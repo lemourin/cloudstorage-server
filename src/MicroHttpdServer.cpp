@@ -23,6 +23,8 @@
 
 #include "MicroHttpdServer.h"
 
+#include <cassert>
+
 namespace {
 
 int http_request_callback(void* cls, MHD_Connection* c, const char* url,
@@ -166,5 +168,6 @@ DaemonPtr create_server(MicroHttpdServer::Type type, int port,
                 port, NULL, NULL, callback, data, MHD_OPTION_NOTIFY_COMPLETED,
                 request_callback, data, MHD_OPTION_HTTPS_MEM_CERT, cert.c_str(),
                 MHD_OPTION_HTTPS_MEM_KEY, key.c_str(), MHD_OPTION_END);
+  assert(daemon);
   return DaemonPtr(daemon, [](MHD_Daemon* daemon) { MHD_stop_daemon(daemon); });
 }
