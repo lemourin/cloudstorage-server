@@ -12,8 +12,8 @@ AM_LDFLAGS = \
 	-no-undefined \
 	$(SOCKET_LIBS)
 
-bin_PROGRAMS = main
-main_SOURCES = \
+bin_PROGRAMS = cloudstorage-server
+cloudstorage_server_SOURCES = \
 	main.cpp \
 	Utility.cpp \
 	HttpServer.cpp \
@@ -21,7 +21,7 @@ main_SOURCES = \
 	MicroHttpdServer.cpp \
 	CurlHttp.cpp
 
-main_LDADD = \
+cloudstorage_server_LDADD = \
 	$(libjsoncpp_LIBS) \
 	$(libmicrohttpd_LIBS) \
 	$(libffmpegthumbnailer_LIBS) \

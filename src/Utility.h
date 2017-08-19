@@ -38,12 +38,34 @@ template <class... Args>
 void log(Args&&... t) {
   std::lock_guard<std::mutex> lock(priv::stream_mutex);
   std::time_t time = std::time(nullptr);
-  std::cerr << "[" << std::put_time(std::gmtime(&time), "%D %T") << "] ";
+  std::cerr << "[" << std::put_time(std::localtime(&time), "%D %T") << "] ";
   priv::log(std::forward<Args>(t)...);
   std::cerr << std::endl;
 }
 
 void enqueue(std::function<void()> f);
+
+class Semaphore {
+ public:
+  Semaphore() : count_() {}
+
+  void notify() {
+    std::unique_lock<std::mutex> lock(mutex_);
+    count_++;
+    condition_.notify_one();
+  }
+
+  void wait() {
+    std::unique_lock<std::mutex> lock(mutex_);
+    while (count_ == 0) condition_.wait(lock);
+    count_--;
+  }
+
+ private:
+  std::mutex mutex_;
+  std::condition_variable condition_;
+  uint32_t count_;
+};
 
 }  // namespace util
 

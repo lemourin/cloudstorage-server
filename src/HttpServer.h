@@ -8,6 +8,7 @@
 #include <mutex>
 
 #include "DispatchServer.h"
+#include "Utility.h"
 
 using namespace cloudstorage;
 
@@ -97,6 +98,8 @@ class HttpServer {
 
   HttpCloudProvider::Pointer provider(const std::string& key);
 
+  int exec();
+
  private:
   friend class HttpCloudProvider;
 
@@ -104,6 +107,7 @@ class HttpServer {
   MicroHttpdServerFactory::Pointer server_factory_;
   IHttpServer::Pointer main_server_;
   CloudConfig config_;
+  util::Semaphore semaphore_;
   mutable std::mutex lock_;
 };
 

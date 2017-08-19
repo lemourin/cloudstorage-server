@@ -97,9 +97,11 @@ IHttpServer::IResponse::Pointer
 HttpServer::ConnectionCallback::receivedConnection(
     const IHttpServer& d, IHttpServer::IConnection::Pointer c) {
   util::log("got request", c->url());
-  Json::Value result;
+  Json::Value result(Json::objectValue);
   const char* key = c->getParameter("key");
-  if (!key) {
+  if (c->url() == "/quit") {
+    server_->semaphore_.notify();
+  } else if (!key) {
     result["error"] = "missing key";
   } else {
     const char* provider = c->getParameter("provider");
@@ -368,4 +370,9 @@ HttpCloudProvider::Pointer HttpServer::provider(const std::string& key) {
   } else {
     return it->second;
   }
+}
+
+int HttpServer::exec() {
+  semaphore_.wait();
+  return 0;
 }

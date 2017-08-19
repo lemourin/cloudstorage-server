@@ -41,6 +41,5 @@ int main(int argc, char** argv) {
     return 1;
   }
   crypto_lock lock;
-  HttpServer server(config);
-  std::this_thread::sleep_for(std::chrono::seconds(INT32_MAX));
+  return HttpServer(config).exec();
 }
