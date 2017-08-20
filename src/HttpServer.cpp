@@ -10,6 +10,7 @@
 #include "Utility.h"
 
 using namespace std::string_literals;
+using namespace std::placeholders;
 
 const std::string SEPARATOR = "--";
 
@@ -60,15 +61,12 @@ class ResponseCallback : public IHttpServer::IResponse::ICallback {
 
 }  // namespace
 
-CloudConfig::CloudConfig(const Json::Value& config,
-                         MicroHttpdServerFactory::Pointer f)
+CloudConfig::CloudConfig(const Json::Value& config)
     : auth_url_(config["auth_url"].asString()),
       file_url_(config["file_url"].asString()),
-      daemon_port_(config["daemon_port"].asInt()),
       youtube_dl_url_(config["youtube_dl_url"].asString()),
       keys_(config["keys"]),
-      secure_(!config["ssl_key"].empty()),
-      file_daemon_(DispatchServer(f, daemon_port_)) {}
+      secure_(!config["ssl_key"].empty()) {}
 
 std::unique_ptr<ICloudProvider::Hints> CloudConfig::hints(
     const std::string& provider) const {
@@ -88,16 +86,14 @@ HttpServer::ConnectionCallback::receivedConnection(
     const IHttpServer& d, IHttpServer::IConnection::Pointer c) {
   if (c->url() != "/health_check") util::log("got request", c->url());
   Json::Value result(Json::objectValue);
-  const char* key = c->getParameter("key");
   if (c->url() == "/quit") {
     server_->semaphore_.notify();
-  } else if (!key) {
-    result["error"] = "missing key";
   } else {
     const char* provider = c->getParameter("provider");
-    if (provider) {
+    const char* key = c->getParameter("key");
+    if (provider && key) {
       auto p = server_->provider(key + SEPARATOR + provider);
-      auto r = p->provider(*c);
+      auto r = p->provider(server_, *c);
       if (!r) {
         result["error"] = "invalid provider";
       } else {
@@ -109,13 +105,13 @@ HttpServer::ConnectionCallback::receivedConnection(
         };
         c->suspend();
         if (c->url() == "/exchange_code"s) {
-          p->exchange_code(r, server_, *c, func);
+          p->exchange_code(r, server_, c->getParameter("code"), func);
         } else if (c->url() == "/list_directory"s) {
-          p->list_directory(r, server_, *c, func);
+          p->list_directory(r, server_, c->getParameter("item_id"), func);
         } else if (c->url() == "/get_item_data"s) {
-          p->get_item_data(r, server_, *c, func);
+          p->get_item_data(r, server_, c->getParameter("item_id"), func);
         } else if (c->url() == "/thumbnail"s) {
-          p->thumbnail(r, server_, *c, func);
+          p->thumbnail(r, server_, c->getParameter("item_id"), func);
         }
         return d.createResponse(IHttpRequest::Ok,
                                 {{"Content-Type", "application/json"}}, -1,
@@ -149,18 +145,43 @@ HttpServer::HttpServer(Json::Value config)
           }
         }
       }),
+      server_port_(config["port"].asInt()),
       server_factory_(std::make_unique<MicroHttpdServerFactory>(
           util::read_file(config["ssl_cert"].asString()),
           util::read_file(config["ssl_key"].asString()))),
-      main_server_(server_factory_->create(
-          std::make_unique<ConnectionCallback>(this), "",
-          MicroHttpdServer::Type::SingleThreaded, config["port"].asInt())),
-      config_(config, server_factory_) {}
+      main_server_(
+          DispatchServer(server_factory_, server_port_,
+                         std::bind(&HttpServer::proxy, this, _1, _2, _3))),
+      query_server_(main_server_, "",
+                    std::make_unique<ConnectionCallback>(this)),
+      config_(config) {}
 
 HttpServer::~HttpServer() {
   done_ = true;
   pending_requests_condition_.notify_one();
   clean_up_thread_.join();
+}
+
+IHttpServer::IResponse::Pointer HttpServer::proxy(
+    const IHttpServer& server, IHttpServer::IConnection::Pointer connection,
+    const DispatchServer::Callback& callback) {
+  if (connection->url() == "/files") {
+    auto key = connection->getParameter("key");
+    auto provider = connection->getParameter("provider");
+    auto file = connection->getParameter("file");
+    auto state = connection->getParameter("state");
+    if (!key || !provider || !file || !state)
+      return server.createResponse(IHttpRequest::Bad, {}, "");
+    auto c = this->provider(key + SEPARATOR + provider);
+    auto provider_object = c->provider(this, *connection);
+    if (!provider_object) return nullptr;
+    c->get_item_data(provider_object, this, connection->getParameter("file"),
+                     [](auto) {});
+    auto f = callback.callback(state);
+    if (!f) return nullptr;
+    return f->receivedConnection(server, connection);
+  }
+  return nullptr;
 }
 
 ICloudProvider::IAuthCallback::Status
@@ -181,7 +202,7 @@ void HttpServer::AuthCallback::done(const ICloudProvider& p,
 }
 
 ICloudProvider::Pointer HttpCloudProvider::provider(
-    const IHttpServer::IConnection& connection) {
+    HttpServer* server, const IHttpServer::IConnection& connection) {
   const char* provider = connection.getParameter("provider");
   const char* token = connection.getParameter("token");
   if (!provider || !token) return nullptr;
@@ -190,7 +211,7 @@ ICloudProvider::Pointer HttpCloudProvider::provider(
     ICloudProvider::InitData data;
     if (token) data.token_ = token;
     data.http_server_ =
-        std::make_unique<ServerWrapperFactory>(config_.file_daemon_);
+        std::make_unique<ServerWrapperFactory>(server->main_server_);
     data.http_engine_ = std::make_unique<CurlHttp>();
     const char* access_token = connection.getParameter("access_token");
     data.hints_ = *config_.hints(provider);
@@ -202,10 +223,9 @@ ICloudProvider::Pointer HttpCloudProvider::provider(
   return provider_;
 }
 
-void HttpCloudProvider::exchange_code(
-    ICloudProvider::Pointer p, HttpServer* server,
-    const IHttpServer::IConnection& connection, Completed c) {
-  const char* code = connection.getParameter("code");
+void HttpCloudProvider::exchange_code(ICloudProvider::Pointer p,
+                                      HttpServer* server, const char* code,
+                                      Completed c) {
   if (!code) {
     Json::Value result;
     result["error"] = "missing code";
@@ -224,10 +244,10 @@ void HttpCloudProvider::exchange_code(
   }));
 }
 
-void HttpCloudProvider::list_directory(
-    ICloudProvider::Pointer p, HttpServer* server,
-    const IHttpServer::IConnection& connection, Completed c) {
-  item(p, server, connection, [=](auto item) {
+void HttpCloudProvider::list_directory(ICloudProvider::Pointer p,
+                                       HttpServer* server, const char* item_id,
+                                       Completed c) {
+  item(p, server, item_id, [=](auto item) {
     if (item.left()) return c(error(p, *item.left()));
     server->add(p->listDirectoryAsync(item.right(), [=](auto list) {
       if (list.right()) {
@@ -249,10 +269,10 @@ void HttpCloudProvider::list_directory(
   });
 }
 
-void HttpCloudProvider::get_item_data(
-    ICloudProvider::Pointer p, HttpServer* server,
-    const IHttpServer::IConnection& connection, Completed c) {
-  item(p, server, connection, [=](auto item) {
+void HttpCloudProvider::get_item_data(ICloudProvider::Pointer p,
+                                      HttpServer* server, const char* item_id,
+                                      Completed c) {
+  item(p, server, item_id, [=](auto item) {
     if (item.left()) {
       c(error(p, *item.left()));
     } else {
@@ -265,9 +285,7 @@ void HttpCloudProvider::get_item_data(
 }
 
 void HttpCloudProvider::item(ICloudProvider::Pointer p, HttpServer* server,
-                             const IHttpServer::IConnection& connection,
-                             CompletedItem c) {
-  const char* item_id = connection.getParameter("item_id");
+                             const char* item_id, CompletedItem c) {
   if (!item_id)
     c(Error{IHttpRequest::NotFound, "not found"});
   else
@@ -276,20 +294,15 @@ void HttpCloudProvider::item(ICloudProvider::Pointer p, HttpServer* server,
 }
 
 void HttpCloudProvider::thumbnail(ICloudProvider::Pointer p, HttpServer* server,
-                                  const IHttpServer::IConnection& connection,
-                                  Completed c) {
-  item(p, server, connection, [=](auto item) {
+                                  const char* item_id, Completed c) {
+  item(p, server, item_id, [=](auto item) {
     if (item.left()) return c(error(p, *item.left()));
 
     class download : public IDownloadFileCallback {
      public:
       download(EitherError<IItem> item, ICloudProvider::Pointer p, bool secure,
-               uint16_t daemon_port, Completed c)
-          : item_(item),
-            p_(p),
-            secure_(secure),
-            daemon_port_(daemon_port),
-            c_(c) {}
+               uint16_t port, Completed c)
+          : item_(item), p_(p), secure_(secure), port_(port), c_(c) {}
 
       void receivedData(const char* data, uint32_t length) override {
         for (size_t i = 0; i < length; i++) data_.push_back(data[i]);
@@ -299,7 +312,7 @@ void HttpCloudProvider::thumbnail(ICloudProvider::Pointer p, HttpServer* server,
         auto c = c_;
         auto p = p_;
         auto secure = secure_;
-        auto daemon_port = daemon_port_;
+        auto port = port_;
         auto f = [=](const std::vector<char>& data) {
           Json::Value result = tokens(p);
           result["thumbnail"] = util::to_base64(
@@ -322,7 +335,7 @@ void HttpCloudProvider::thumbnail(ICloudProvider::Pointer p, HttpServer* server,
                     auto rest =
                         std::string(url.begin() + file_url.length(), url.end());
                     url = (secure ? "https" : "http") + "://localhost:"s +
-                          std::to_string(daemon_port) + rest;
+                          std::to_string(port) + rest;
                   }
                 }
                 thumbnailer.generateThumbnail(url, ThumbnailerImageType::Png,
@@ -347,7 +360,7 @@ void HttpCloudProvider::thumbnail(ICloudProvider::Pointer p, HttpServer* server,
       EitherError<IItem> item_;
       ICloudProvider::Pointer p_;
       bool secure_;
-      uint16_t daemon_port_;
+      uint16_t port_;
       Completed c_;
       std::vector<char> data_;
     };
@@ -355,7 +368,7 @@ void HttpCloudProvider::thumbnail(ICloudProvider::Pointer p, HttpServer* server,
     server->add(p->getThumbnailAsync(
         item.right(),
         std::make_shared<download>(item, p, server->config_.secure_,
-                                   server->config_.daemon_port_, c)));
+                                   server->server_port_, c)));
   });
 }
 
@@ -371,6 +384,7 @@ Json::Value HttpServer::list_providers(
     const IHttpServer::IConnection& connection) const {
   Json::Value result;
   const char* key = connection.getParameter("key");
+  if (!key) key = "";
   Json::Value array(Json::arrayValue);
   for (auto t : ICloudStorage::create()->providers()) {
     if (auto hints = config_.hints(t)) {

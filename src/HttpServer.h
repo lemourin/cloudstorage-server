@@ -17,18 +17,16 @@ using namespace cloudstorage;
 class HttpServer;
 
 struct CloudConfig {
-  CloudConfig(const Json::Value&, MicroHttpdServerFactory::Pointer);
+  CloudConfig(const Json::Value&);
 
   std::unique_ptr<ICloudProvider::Hints> hints(
       const std::string& provider) const;
 
   std::string auth_url_;
   std::string file_url_;
-  uint16_t daemon_port_;
   std::string youtube_dl_url_;
   Json::Value keys_;
   bool secure_;
-  DispatchServer file_daemon_;
 };
 
 class HttpCloudProvider {
@@ -42,22 +40,23 @@ class HttpCloudProvider {
   HttpCloudProvider(CloudConfig config, std::string key)
       : config_(config), key_(key) {}
 
-  ICloudProvider::Pointer provider(const IHttpServer::IConnection& connection);
+  ICloudProvider::Pointer provider(HttpServer*,
+                                   const IHttpServer::IConnection& connection);
 
-  void item(ICloudProvider::Pointer p, HttpServer* server,
-            const IHttpServer::IConnection& connection, CompletedItem);
+  void item(ICloudProvider::Pointer p, HttpServer* server, const char* item_id,
+            CompletedItem);
 
   void exchange_code(ICloudProvider::Pointer p, HttpServer* server,
-                     const IHttpServer::IConnection& connection, Completed);
+                     const char* code, Completed);
 
   void list_directory(ICloudProvider::Pointer p, HttpServer* server,
-                      const IHttpServer::IConnection& connection, Completed);
+                      const char* item_id, Completed);
 
   void get_item_data(ICloudProvider::Pointer p, HttpServer* server,
-                     const IHttpServer::IConnection& connection, Completed);
+                     const char* item_id, Completed);
 
   void thumbnail(ICloudProvider::Pointer p, HttpServer* server,
-                 const IHttpServer::IConnection& connection, Completed);
+                 const char* item_id, Completed);
 
   static Json::Value error(ICloudProvider::Pointer p, Error);
 
@@ -98,6 +97,10 @@ class HttpServer {
   HttpServer(Json::Value config);
   ~HttpServer();
 
+  IHttpServer::IResponse::Pointer proxy(const IHttpServer&,
+                                        IHttpServer::IConnection::Pointer,
+                                        const DispatchServer::Callback&);
+
   Json::Value list_providers(const IHttpServer::IConnection&) const;
 
   HttpCloudProvider::Pointer provider(const std::string& key);
@@ -115,8 +118,10 @@ class HttpServer {
   std::atomic_bool done_;
   std::thread clean_up_thread_;
   std::unordered_map<std::string, HttpCloudProvider::Pointer> data_;
+  uint16_t server_port_;
   MicroHttpdServerFactory::Pointer server_factory_;
-  IHttpServer::Pointer main_server_;
+  DispatchServer main_server_;
+  ServerWrapper query_server_;
   CloudConfig config_;
   util::Semaphore semaphore_;
   mutable std::mutex lock_;

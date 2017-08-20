@@ -3,10 +3,12 @@
 #include <iostream>
 
 DispatchServer::DispatchServer(MicroHttpdServerFactory::Pointer f,
-                               uint16_t port)
-    : callback_(std::make_shared<Callback>()),
+                               uint16_t port, ProxyFunction p)
+    : callback_(std::make_shared<Callback>(p)),
       http_server_(f->create(callback_, "",
                              MicroHttpdServer::Type::SingleThreaded, port)) {}
+
+DispatchServer::Callback::Callback(ProxyFunction f) : proxy_(f) {}
 
 void DispatchServer::Callback::addCallback(const std::string& str,
                                            ICallback::Pointer cb) {
@@ -20,13 +22,23 @@ void DispatchServer::Callback::removeCallback(const std::string& str) {
   if (it != std::end(client_callbacks_)) client_callbacks_.erase(it);
 }
 
+IHttpServer::ICallback::Pointer DispatchServer::Callback::callback(
+    const std::string& str) const {
+  std::lock_guard<std::mutex> lock(lock_);
+  auto it = client_callbacks_.find(str);
+  return it == std::end(client_callbacks_) ? nullptr : it->second;
+}
+
 IHttpServer::IResponse::Pointer DispatchServer::Callback::receivedConnection(
     const IHttpServer& server, IHttpServer::IConnection::Pointer connection) {
+  if (auto ret = proxy_(server, connection, *this)) return ret;
   const char* state = connection->getParameter("state");
-  if (!state || client_callbacks_.find(state) == std::end(client_callbacks_))
+  if (!state) state = "";
+  auto callback = this->callback(state);
+  if (!callback)
     return server.createResponse(404, {}, "missing/invalid state parameter");
-  return client_callbacks_.find(state)->second->receivedConnection(server,
-                                                                   connection);
+  else
+    return callback->receivedConnection(server, connection);
 }
 
 ServerWrapper::ServerWrapper(DispatchServer server, const std::string& session,
