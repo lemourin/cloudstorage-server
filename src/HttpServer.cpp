@@ -186,8 +186,6 @@ ICloudProvider::Pointer HttpCloudProvider::provider(
   if (!provider) return nullptr;
   std::lock_guard<std::mutex> lock(lock_);
   if (!provider_ || status_ == Status::Denied) {
-    provider_ = ICloudStorage::create()->provider(provider);
-    if (!provider_) return nullptr;
     ICloudProvider::InitData data;
     if (token) data.token_ = token;
     data.http_server_ =
@@ -198,7 +196,7 @@ ICloudProvider::Pointer HttpCloudProvider::provider(
     if (access_token) data.hints_["access_token"] = access_token;
     data.hints_["state"] = key_;
     data.callback_ = std::make_unique<HttpServer::AuthCallback>(this);
-    provider_->initialize(std::move(data));
+    provider_ = ICloudStorage::create()->provider(provider, std::move(data));
   }
   return provider_;
 }
@@ -215,7 +213,8 @@ void HttpCloudProvider::exchange_code(
   server->add(p->exchangeCodeAsync(code, [=](auto token) {
     if (token.right()) {
       Json::Value result;
-      result["token"] = *token.right();
+      result["token"] = token.right()->token_;
+      result["access_token"] = token.right()->access_token_;
       result["provider"] = p->name();
       c(result);
     } else {
@@ -350,19 +349,18 @@ Json::Value HttpServer::list_providers(
     const IHttpServer::IConnection& connection) const {
   Json::Value result;
   const char* key = connection.getParameter("key");
-  auto p = ICloudStorage::create()->providers();
   Json::Value array(Json::arrayValue);
-  for (auto t : p) {
-    if (auto hints = config_.hints(t->name())) {
+  for (auto t : ICloudStorage::create()->providers()) {
+    if (auto hints = config_.hints(t)) {
       ICloudProvider::InitData data;
-      hints->insert({"state", key + SEPARATOR + t->name()});
+      hints->insert({"state", key + SEPARATOR + t});
       data.hints_ = *hints;
       data.http_server_ = std::make_unique<MicroHttpdServerFactory>("", "");
       data.http_engine_ = std::make_unique<CurlHttp>();
-      t->initialize(std::move(data));
+      auto p = ICloudStorage::create()->provider(t, std::move(data));
       Json::Value v;
-      v["name"] = t->name();
-      v["url"] = t->authorizeLibraryUrl();
+      v["name"] = p->name();
+      v["url"] = p->authorizeLibraryUrl();
       array.append(v);
     }
   }
