@@ -318,13 +318,11 @@ void HttpCloudProvider::thumbnail(ICloudProvider::Pointer p, HttpServer* server,
                 auto file_url = p->hints()["file_url"];
                 auto url = i->url();
                 if (!file_url.empty()) {
-                  util::log(file_url, url);
                   if (url.substr(0, file_url.length()) == file_url) {
                     auto rest =
                         std::string(url.begin() + file_url.length(), url.end());
                     url = (secure ? "https" : "http") + "://localhost:"s +
                           std::to_string(daemon_port) + rest;
-                    util::log("replaced url", url);
                   }
                 }
                 thumbnailer.generateThumbnail(url, ThumbnailerImageType::Png,
