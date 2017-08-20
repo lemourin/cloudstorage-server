@@ -67,6 +67,7 @@ CloudConfig::CloudConfig(const Json::Value& config,
       daemon_port_(config["daemon_port"].asInt()),
       youtube_dl_url_(config["youtube_dl_url"].asString()),
       keys_(config["keys"]),
+      secure_(!config["ssl_key"].empty()),
       file_daemon_(DispatchServer(f, daemon_port_)) {}
 
 std::unique_ptr<ICloudProvider::Hints> CloudConfig::hints(
@@ -78,14 +79,14 @@ std::unique_ptr<ICloudProvider::Hints> CloudConfig::hints(
   hints["client_id"] = keys_[provider]["client_id"].asString();
   hints["client_secret"] = keys_[provider]["client_secret"].asString();
   hints["redirect_uri"] = auth_url_;
-  hints["file_url"] = file_url_;
+  hints["file_url"] = file_url_ + "/" + provider;
   return p;
 }
 
 IHttpServer::IResponse::Pointer
 HttpServer::ConnectionCallback::receivedConnection(
     const IHttpServer& d, IHttpServer::IConnection::Pointer c) {
-  util::log("got request", c->url());
+  if (c->url() != "/health_check") util::log("got request", c->url());
   Json::Value result(Json::objectValue);
   const char* key = c->getParameter("key");
   if (c->url() == "/quit") {
@@ -183,9 +184,9 @@ ICloudProvider::Pointer HttpCloudProvider::provider(
     const IHttpServer::IConnection& connection) {
   const char* provider = connection.getParameter("provider");
   const char* token = connection.getParameter("token");
-  if (!provider) return nullptr;
+  if (!provider || !token) return nullptr;
   std::lock_guard<std::mutex> lock(lock_);
-  if (!provider_ || status_ == Status::Denied) {
+  if (!provider_ || provider_->token() != token || status_ == Status::Denied) {
     ICloudProvider::InitData data;
     if (token) data.token_ = token;
     data.http_server_ =
@@ -282,8 +283,13 @@ void HttpCloudProvider::thumbnail(ICloudProvider::Pointer p, HttpServer* server,
 
     class download : public IDownloadFileCallback {
      public:
-      download(EitherError<IItem> item, ICloudProvider::Pointer p, Completed c)
-          : item_(item), p_(p), c_(c) {}
+      download(EitherError<IItem> item, ICloudProvider::Pointer p, bool secure,
+               uint16_t daemon_port, Completed c)
+          : item_(item),
+            p_(p),
+            secure_(secure),
+            daemon_port_(daemon_port),
+            c_(c) {}
 
       void receivedData(const char* data, uint32_t length) override {
         for (size_t i = 0; i < length; i++) data_.push_back(data[i]);
@@ -292,7 +298,9 @@ void HttpCloudProvider::thumbnail(ICloudProvider::Pointer p, HttpServer* server,
         auto i = item_.right();
         auto c = c_;
         auto p = p_;
-        auto f = [i, c, p](const std::vector<char>& data) {
+        auto secure = secure_;
+        auto daemon_port = daemon_port_;
+        auto f = [=](const std::vector<char>& data) {
           Json::Value result = tokens(p);
           result["thumbnail"] = util::to_base64(
               reinterpret_cast<const unsigned char*>(data.begin().base()),
@@ -300,15 +308,27 @@ void HttpCloudProvider::thumbnail(ICloudProvider::Pointer p, HttpServer* server,
           c(result);
         };
         if (thumbnail.left()) {
-          util::enqueue([i, c, p, f]() {
+          util::enqueue([=]() {
             if ((i->type() == IItem::FileType::Video ||
                  i->type() == IItem::FileType::Image) &&
                 !i->url().empty()) {
               try {
                 std::vector<uint8_t> buffer;
                 ffmpegthumbnailer::VideoThumbnailer thumbnailer;
-                thumbnailer.generateThumbnail(
-                    i->url(), ThumbnailerImageType::Png, buffer);
+                auto file_url = p->hints()["file_url"];
+                auto url = i->url();
+                if (!file_url.empty()) {
+                  util::log(file_url, url);
+                  if (url.substr(0, file_url.length()) == file_url) {
+                    auto rest =
+                        std::string(url.begin() + file_url.length(), url.end());
+                    url = (secure ? "https" : "http") + "://localhost:"s +
+                          std::to_string(daemon_port) + rest;
+                    util::log("replaced url", url);
+                  }
+                }
+                thumbnailer.generateThumbnail(url, ThumbnailerImageType::Png,
+                                              buffer);
                 auto ptr = reinterpret_cast<const char*>(buffer.data());
                 f(std::vector<char>(ptr, ptr + buffer.size()));
               } catch (const std::exception& e) {
@@ -328,12 +348,16 @@ void HttpCloudProvider::thumbnail(ICloudProvider::Pointer p, HttpServer* server,
 
       EitherError<IItem> item_;
       ICloudProvider::Pointer p_;
+      bool secure_;
+      uint16_t daemon_port_;
       Completed c_;
       std::vector<char> data_;
     };
 
-    server->add(p->getThumbnailAsync(item.right(),
-                                     std::make_shared<download>(item, p, c)));
+    server->add(p->getThumbnailAsync(
+        item.right(),
+        std::make_shared<download>(item, p, server->config_.secure_,
+                                   server->config_.daemon_port_, c)));
   });
 }
 

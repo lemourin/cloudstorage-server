@@ -27,6 +27,7 @@ struct CloudConfig {
   uint16_t daemon_port_;
   std::string youtube_dl_url_;
   Json::Value keys_;
+  bool secure_;
   DispatchServer file_daemon_;
 };
 
