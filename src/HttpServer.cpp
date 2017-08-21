@@ -16,6 +16,20 @@ const std::string SEPARATOR = "--";
 
 namespace {
 
+class HttpWrapper : public IHttp {
+ public:
+  HttpWrapper(std::shared_ptr<IHttp> p) : http_(p) {}
+
+  IHttpRequest::Pointer create(const std::string& url,
+                               const std::string& method,
+                               bool follow_redirect) const override {
+    return http_->create(url, method, follow_redirect);
+  }
+
+ private:
+  std::shared_ptr<IHttp> http_;
+};
+
 std::string file_type_to_string(IItem::FileType type) {
   switch (type) {
     case IItem::FileType::Audio:
@@ -164,7 +178,8 @@ HttpServer::HttpServer(Json::Value config)
                          std::bind(&HttpServer::proxy, this, _1, _2, _3))),
       query_server_(main_server_, "",
                     std::make_unique<ConnectionCallback>(this)),
-      config_(config) {}
+      config_(config),
+      http_(std::make_shared<curl::CurlHttp>()) {}
 
 HttpServer::~HttpServer() {
   done_ = true;
@@ -223,7 +238,7 @@ ICloudProvider::Pointer HttpCloudProvider::provider(
     if (token) data.token_ = token;
     data.http_server_ =
         std::make_unique<ServerWrapperFactory>(server->main_server_);
-    data.http_engine_ = std::make_unique<CurlHttp>();
+    data.http_engine_ = std::make_unique<HttpWrapper>(server->http_);
     const char* access_token = connection.getParameter("access_token");
     data.hints_ = *config_.hints(provider);
     if (access_token) data.hints_["access_token"] = access_token;
@@ -403,7 +418,7 @@ Json::Value HttpServer::list_providers(
       hints->insert({"state", key + SEPARATOR + t});
       data.hints_ = *hints;
       data.http_server_ = std::make_unique<MicroHttpdServerFactory>("", "");
-      data.http_engine_ = std::make_unique<CurlHttp>();
+      data.http_engine_ = std::make_unique<HttpWrapper>(http_);
       auto p = ICloudStorage::create()->provider(t, std::move(data));
       Json::Value v;
       v["name"] = p->name();
