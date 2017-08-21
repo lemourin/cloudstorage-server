@@ -44,7 +44,7 @@ struct Worker {
 
   ~Worker() {
     done_ = true;
-    nonempty_.notify_all();
+    nonempty_.notify_one();
     thread_.join();
   }
 
