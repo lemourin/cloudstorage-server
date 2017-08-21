@@ -84,7 +84,6 @@ std::unique_ptr<ICloudProvider::Hints> CloudConfig::hints(
 IHttpServer::IResponse::Pointer
 HttpServer::ConnectionCallback::receivedConnection(
     const IHttpServer& d, IHttpServer::IConnection::Pointer c) {
-  if (c->url() != "/health_check") util::log("got request", c->url());
   Json::Value result(Json::objectValue);
   if (c->url() == "/quit") {
     server_->semaphore_.notify();
@@ -97,10 +96,16 @@ HttpServer::ConnectionCallback::receivedConnection(
       if (!r) {
         result["error"] = "invalid provider";
       } else {
+        auto start_time = std::chrono::system_clock::now();
         auto stream = std::make_shared<std::stringstream>();
         auto cb = std::make_unique<ResponseCallback>(stream);
+        auto url = c->url();
         auto func = [=](auto e) {
           *stream << Json::StyledWriter().write(e);
+          util::log(url, "lasted",
+                    std::chrono::duration<double>(
+                        std::chrono::system_clock::now() - start_time)
+                        .count());
           c->resume();
         };
         c->suspend();
@@ -112,6 +117,9 @@ HttpServer::ConnectionCallback::receivedConnection(
           p->get_item_data(r, server_, c->getParameter("item_id"), func);
         } else if (c->url() == "/thumbnail"s) {
           p->thumbnail(r, server_, c->getParameter("item_id"), func);
+        } else {
+          result["error"] = "bad request";
+          func(result);
         }
         return d.createResponse(IHttpRequest::Ok,
                                 {{"Content-Type", "application/json"}}, -1,
@@ -124,6 +132,8 @@ HttpServer::ConnectionCallback::receivedConnection(
         result["error"] = "invalid request";
     }
   }
+
+  if (c->url() != "/health_check") util::log(c->url(), "received");
 
   auto str = Json::StyledWriter().write(result);
   return d.createResponse(200, {{"Content-Type", "application/json"}}, str);
@@ -160,6 +170,7 @@ HttpServer::~HttpServer() {
   done_ = true;
   pending_requests_condition_.notify_one();
   clean_up_thread_.join();
+  data_.clear();
 }
 
 IHttpServer::IResponse::Pointer HttpServer::proxy(
