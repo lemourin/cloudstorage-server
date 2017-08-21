@@ -112,6 +112,9 @@ HttpServer::ConnectionCallback::receivedConnection(
           p->get_item_data(r, server_, c->getParameter("item_id"), func);
         } else if (c->url() == "/thumbnail"s) {
           p->thumbnail(r, server_, c->getParameter("item_id"), func);
+        } else {
+          result["error"] = "bad request";
+          func(result);
         }
         return d.createResponse(IHttpRequest::Ok,
                                 {{"Content-Type", "application/json"}}, -1,
