@@ -2,6 +2,7 @@
 #define UTILITY_H
 
 #include <cloudstorage/ICloudProvider.h>
+#include <cloudstorage/IHttp.h>
 #include <json/json.h>
 #include <condition_variable>
 #include <ctime>
@@ -66,6 +67,10 @@ class Semaphore {
   std::condition_variable condition_;
   uint32_t count_;
 };
+
+cloudstorage::IHttpServer::IResponse::Pointer response_from_string(
+    const cloudstorage::IHttpServer::IRequest&, int code,
+    const cloudstorage::IHttpServer::IResponse::Headers&, const std::string&);
 
 }  // namespace util
 

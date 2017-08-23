@@ -40,8 +40,7 @@ class HttpCloudProvider {
   HttpCloudProvider(CloudConfig config, std::string key)
       : config_(config), key_(key) {}
 
-  ICloudProvider::Pointer provider(HttpServer*,
-                                   const IHttpServer::IConnection& connection);
+  ICloudProvider::Pointer provider(HttpServer*, const IHttpServer::IRequest&);
 
   void item(ICloudProvider::Pointer p, HttpServer* server, const char* item_id,
             CompletedItem);
@@ -87,8 +86,8 @@ class HttpServer {
    public:
     ConnectionCallback(HttpServer* server) : server_(server) {}
 
-    IHttpServer::IResponse::Pointer receivedConnection(
-        const IHttpServer&, IHttpServer::IConnection::Pointer) override;
+    IHttpServer::IResponse::Pointer handle(
+        const IHttpServer::IRequest&) override;
 
    private:
     HttpServer* server_;
@@ -97,11 +96,10 @@ class HttpServer {
   HttpServer(Json::Value config);
   ~HttpServer();
 
-  IHttpServer::IResponse::Pointer proxy(const IHttpServer&,
-                                        IHttpServer::IConnection::Pointer,
+  IHttpServer::IResponse::Pointer proxy(const IHttpServer::IRequest&,
                                         const DispatchServer::Callback&);
 
-  Json::Value list_providers(const IHttpServer::IConnection&) const;
+  Json::Value list_providers(const IHttpServer::IRequest&) const;
 
   HttpCloudProvider::Pointer provider(const std::string& key);
 

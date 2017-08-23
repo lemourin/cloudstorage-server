@@ -1,5 +1,7 @@
 #include "Utility.h"
+
 #include <atomic>
+#include <cstring>
 #include <fstream>
 #include <sstream>
 #include <thread>
@@ -119,6 +121,29 @@ std::string to_base64(const unsigned char* bytes_to_encode,
   }
 
   return ret;
+}
+
+cloudstorage::IHttpServer::IResponse::Pointer response_from_string(
+    const cloudstorage::IHttpServer::IRequest& request, int code,
+    const cloudstorage::IHttpServer::IResponse::Headers& headers,
+    const std::string& data) {
+  class DataProvider : public cloudstorage::IHttpServer::IResponse::ICallback {
+   public:
+    DataProvider(const std::string& data) : position_(), data_(data) {}
+
+    int putData(char* buffer, size_t max) override {
+      int cnt = std::min(data_.length() - position_, max);
+      memcpy(buffer, (data_.begin() + position_).base(), cnt);
+      position_ += cnt;
+      return cnt;
+    }
+
+   private:
+    int position_;
+    std::string data_;
+  };
+  return request.response(code, headers, data.length(),
+                          std::make_unique<DataProvider>(data));
 }
 
 }  // namespace util

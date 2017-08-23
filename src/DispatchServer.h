@@ -15,14 +15,14 @@ class DispatchServer {
   class Callback;
 
   using ProxyFunction = std::function<IHttpServer::IResponse::Pointer(
-      const IHttpServer&, IHttpServer::IConnection::Pointer, const Callback&)>;
+      const IHttpServer::IRequest&, const Callback&)>;
 
   class Callback : public IHttpServer::ICallback {
    public:
     Callback(ProxyFunction);
 
-    IHttpServer::IResponse::Pointer receivedConnection(
-        const IHttpServer&, IHttpServer::IConnection::Pointer) override;
+    IHttpServer::IResponse::Pointer handle(
+        const IHttpServer::IRequest&) override;
 
     void addCallback(const std::string&, ICallback::Pointer);
     void removeCallback(const std::string&);
@@ -49,12 +49,6 @@ class ServerWrapper : public IHttpServer {
   ServerWrapper(DispatchServer, const std::string& session,
                 IHttpServer::ICallback::Pointer);
   ~ServerWrapper();
-
-  IResponse::Pointer createResponse(int code, const IResponse::Headers&,
-                                    const std::string& body) const override;
-  IResponse::Pointer createResponse(
-      int code, const IResponse::Headers&, int size, int chunk_size,
-      IResponse::ICallback::Pointer) const override;
 
   ICallback::Pointer callback() const override;
 

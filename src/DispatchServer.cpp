@@ -1,6 +1,6 @@
 #include "DispatchServer.h"
 
-#include <iostream>
+#include "Utility.h"
 
 DispatchServer::DispatchServer(MicroHttpdServerFactory::Pointer f,
                                uint16_t port, ProxyFunction p)
@@ -29,16 +29,17 @@ IHttpServer::ICallback::Pointer DispatchServer::Callback::callback(
   return it == std::end(client_callbacks_) ? nullptr : it->second;
 }
 
-IHttpServer::IResponse::Pointer DispatchServer::Callback::receivedConnection(
-    const IHttpServer& server, IHttpServer::IConnection::Pointer connection) {
-  if (auto ret = proxy_(server, connection, *this)) return ret;
-  const char* state = connection->getParameter("state");
+IHttpServer::IResponse::Pointer DispatchServer::Callback::handle(
+    const IHttpServer::IRequest& request) {
+  if (auto ret = proxy_(request, *this)) return ret;
+  const char* state = request.get("state");
   if (!state) state = "";
   auto callback = this->callback(state);
   if (!callback)
-    return server.createResponse(404, {}, "missing/invalid state parameter");
+    return util::response_from_string(request, 404, {},
+                                      "missing/invalid state parameter");
   else
-    return callback->receivedConnection(server, connection);
+    return callback->handle(request);
 }
 
 ServerWrapper::ServerWrapper(DispatchServer server, const std::string& session,
@@ -48,19 +49,6 @@ ServerWrapper::ServerWrapper(DispatchServer server, const std::string& session,
 }
 
 ServerWrapper::~ServerWrapper() { server_.callback_->removeCallback(session_); }
-
-IHttpServer::IResponse::Pointer ServerWrapper::createResponse(
-    int code, const IResponse::Headers& headers,
-    const std::string& body) const {
-  return server_.http_server_->createResponse(code, headers, body);
-}
-
-IHttpServer::IResponse::Pointer ServerWrapper::createResponse(
-    int code, const IResponse::Headers& headers, int size, int chunk_size,
-    IResponse::ICallback::Pointer cb) const {
-  return server_.http_server_->createResponse(code, headers, size, chunk_size,
-                                              std::move(cb));
-}
 
 IHttpServer::ICallback::Pointer ServerWrapper::callback() const {
   return server_.http_server_->callback();
