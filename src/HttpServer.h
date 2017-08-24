@@ -49,7 +49,7 @@ class HttpCloudProvider {
                      const char* code, Completed);
 
   void list_directory(ICloudProvider::Pointer p, HttpServer* server,
-                      const char* item_id, Completed);
+                      const char* item_id, const char* page_token, Completed);
 
   void get_item_data(ICloudProvider::Pointer p, HttpServer* server,
                      const char* item_id, Completed);

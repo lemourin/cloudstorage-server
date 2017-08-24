@@ -159,7 +159,8 @@ IHttpServer::IResponse::Pointer HttpServer::ConnectionCallback::handle(
         if (c.url() == "/exchange_code"s) {
           p->exchange_code(r, server_, c.get("code"), func);
         } else if (c.url() == "/list_directory"s) {
-          p->list_directory(r, server_, c.get("item_id"), func);
+          p->list_directory(r, server_, c.get("item_id"), c.get("page_token"),
+                            func);
         } else if (c.url() == "/get_item_data"s) {
           p->get_item_data(r, server_, c.get("item_id"), func);
         } else if (c.url() == "/thumbnail"s) {
@@ -304,26 +305,31 @@ void HttpCloudProvider::exchange_code(ICloudProvider::Pointer p,
 
 void HttpCloudProvider::list_directory(ICloudProvider::Pointer p,
                                        HttpServer* server, const char* item_id,
-                                       Completed c) {
+                                       const char* page_token, Completed c) {
+  if (!page_token)
+    return c(error(p, Error{IHttpRequest::Bad, "missing page token"}));
   item(p, server, item_id, [=](auto item) {
     if (item.left()) return c(error(p, *item.left()));
-    server->add(p->listDirectoryAsync(item.right(), [=](auto list) {
-      if (list.right()) {
-        Json::Value result = tokens(p);
-        Json::Value array(Json::arrayValue);
-        for (auto i : *list.right()) {
-          Json::Value v;
-          v["id"] = i->id();
-          v["filename"] = i->filename();
-          v["type"] = file_type_to_string(i->type());
-          array.append(v);
-        }
-        result["items"] = array;
-        c(result);
-      } else {
-        c(error(p, *list.left()));
-      }
-    }));
+    server->add(
+        p->listDirectoryPageAsync(item.right(), page_token, [=](auto list) {
+          if (list.right()) {
+            Json::Value result = tokens(p);
+            Json::Value array(Json::arrayValue);
+            for (auto i : list.right()->items_) {
+              Json::Value v;
+              v["id"] = i->id();
+              v["filename"] = i->filename();
+              v["type"] = file_type_to_string(i->type());
+              array.append(v);
+            }
+            result["items"] = array;
+            if (!list.right()->next_token_.empty())
+              result["next_token"] = list.right()->next_token_;
+            c(result);
+          } else {
+            c(error(p, *list.left()));
+          }
+        }));
   });
 }
 
