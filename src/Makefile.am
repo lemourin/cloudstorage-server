@@ -3,6 +3,7 @@ ACLOCAL_AMFLAGS = -I m4
 AM_CXXFLAGS = \
 	$(libjsoncpp_CFLAGS) \
 	$(libmicrohttpd_CFLAGS) \
+	$(libavutil_CFLAGS) \
 	$(libffmpegthumbnailer_CFLAGS) \
 	$(libcloudstorage_CFLAGS) \
 	$(libcrypto_CFLAGS) \
@@ -24,6 +25,7 @@ cloudstorage_server_SOURCES = \
 cloudstorage_server_LDADD = \
 	$(libjsoncpp_LIBS) \
 	$(libmicrohttpd_LIBS) \
+	$(libavutil_LIBS) \
 	$(libffmpegthumbnailer_LIBS) \
 	$(libcloudstorage_LIBS) \
 	$(libcrypto_LIBS) \

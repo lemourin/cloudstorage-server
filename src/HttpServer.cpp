@@ -1,5 +1,9 @@
 #include "HttpServer.h"
 
+extern "C" {
+#include <libavutil/log.h>
+}
+
 #include <libffmpegthumbnailer/videothumbnailer.h>
 #include <condition_variable>
 #include <fstream>
@@ -206,7 +210,9 @@ HttpServer::HttpServer(Json::Value config)
       query_server_(main_server_, "",
                     std::make_unique<ConnectionCallback>(this)),
       config_(config),
-      http_(std::make_shared<curl::CurlHttp>()) {}
+      http_(std::make_shared<curl::CurlHttp>()) {
+  av_log_set_level(AV_LOG_QUIET);
+}
 
 HttpServer::~HttpServer() {
   done_ = true;
