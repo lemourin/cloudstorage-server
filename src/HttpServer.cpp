@@ -211,7 +211,7 @@ HttpServer::HttpServer(Json::Value config)
                     std::make_unique<ConnectionCallback>(this)),
       config_(config),
       http_(std::make_shared<curl::CurlHttp>()) {
-  av_log_set_level(AV_LOG_QUIET);
+  av_log_set_level(AV_LOG_PANIC);
 }
 
 HttpServer::~HttpServer() {
