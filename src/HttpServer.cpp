@@ -386,7 +386,7 @@ void HttpCloudProvider::thumbnail(ICloudProvider::Pointer p, HttpServer* server,
                   if (url.substr(0, file_url.length()) == file_url) {
                     auto rest =
                         std::string(url.begin() + file_url.length(), url.end());
-                    url = (secure ? "https" : "http") + "://localhost:"s +
+                    url = (secure ? "https" : "http") + "://127.0.0.1:"s +
                           std::to_string(port) + rest;
                   }
                 }
