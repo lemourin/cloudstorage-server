@@ -27,16 +27,15 @@
 #include <curl/curl.h>
 #include <atomic>
 #include <condition_variable>
-#include <future>
 #include <memory>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
 #include <cloudstorage/IHttp.h>
 
-using cloudstorage::IHttp;
-using cloudstorage::IHttpRequest;
+using namespace cloudstorage;
 
 namespace curl {
 
