@@ -69,4 +69,28 @@ class ServerWrapperFactory : public IHttpServerFactory {
   DispatchServer server_;
 };
 
+class RequestWrapper : public IHttpServer::IRequest {
+ public:
+  RequestWrapper(const IHttpServer::IRequest& r) : r_(r) {}
+
+  const char* get(const std::string& name) const override {
+    return r_.get(name);
+  }
+
+  const char* header(const std::string& name) const override {
+    return r_.header(name);
+  }
+
+  std::string url() const override { return r_.url(); }
+
+  IHttpServer::IResponse::Pointer response(
+      int code, const IHttpServer::IResponse::Headers& h, int size,
+      IHttpServer::IResponse::ICallback::Pointer cb) const override {
+    return r_.response(code, h, size, std::move(cb));
+  }
+
+ private:
+  const IHttpServer::IRequest& r_;
+};
+
 #endif  // DISPATCH_SERVER_H

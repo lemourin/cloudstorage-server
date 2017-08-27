@@ -25,6 +25,7 @@ struct CloudConfig {
   std::string auth_url_;
   std::string file_url_;
   std::string youtube_dl_url_;
+  std::string temporary_directory_;
   Json::Value keys_;
   bool secure_;
 };
@@ -35,10 +36,7 @@ class HttpCloudProvider {
   using Completed = std::function<void(Json::Value)>;
   using CompletedItem = std::function<void(EitherError<IItem>)>;
 
-  enum class Status { Accepted, Denied };
-
-  HttpCloudProvider(CloudConfig config, std::string key)
-      : config_(config), key_(key) {}
+  HttpCloudProvider(CloudConfig config) : config_(config) {}
 
   ICloudProvider::Pointer provider(HttpServer*, const IHttpServer::IRequest&);
 
@@ -59,14 +57,8 @@ class HttpCloudProvider {
 
   static Json::Value error(ICloudProvider::Pointer p, Error);
 
-  void set_status(Status s) { status_ = s; }
-
  private:
   CloudConfig config_;
-  std::string key_;
-  ICloudProvider::Pointer provider_;
-  std::atomic<Status> status_;
-  mutable std::mutex lock_;
 };
 
 class HttpServer {
@@ -101,21 +93,24 @@ class HttpServer {
 
   Json::Value list_providers(const IHttpServer::IRequest&) const;
 
-  HttpCloudProvider::Pointer provider(const std::string& key);
-
-  void add(std::shared_ptr<IGenericRequest>);
+  void add(ICloudProvider::Pointer p, std::shared_ptr<IGenericRequest>);
 
   int exec();
 
  private:
   friend class HttpCloudProvider;
 
+  struct Request {
+    ICloudProvider::Pointer provider_;
+    std::shared_ptr<IGenericRequest> request_;
+  };
+
   std::mutex pending_requests_mutex_;
   std::condition_variable pending_requests_condition_;
-  std::vector<std::shared_ptr<IGenericRequest>> pending_requests_;
+  std::vector<Request> pending_requests_;
   std::atomic_bool done_;
   std::thread clean_up_thread_;
-  std::unordered_map<std::string, HttpCloudProvider::Pointer> data_;
+  std::atomic_int request_id_;
   uint16_t server_port_;
   MicroHttpdServerFactory::Pointer server_factory_;
   DispatchServer main_server_;

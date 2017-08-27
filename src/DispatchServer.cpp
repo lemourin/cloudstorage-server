@@ -1,5 +1,6 @@
 #include "DispatchServer.h"
 
+#include <cassert>
 #include "Utility.h"
 
 DispatchServer::DispatchServer(MicroHttpdServerFactory::Pointer f,
@@ -13,13 +14,15 @@ DispatchServer::Callback::Callback(ProxyFunction f) : proxy_(f) {}
 void DispatchServer::Callback::addCallback(const std::string& str,
                                            ICallback::Pointer cb) {
   std::lock_guard<std::mutex> lock(lock_);
+  assert(client_callbacks_.find(str) == client_callbacks_.end());
   client_callbacks_[str] = std::move(cb);
 }
 
 void DispatchServer::Callback::removeCallback(const std::string& str) {
   std::lock_guard<std::mutex> lock(lock_);
   auto it = client_callbacks_.find(str);
-  if (it != std::end(client_callbacks_)) client_callbacks_.erase(it);
+  assert(it != std::end(client_callbacks_));
+  client_callbacks_.erase(it);
 }
 
 IHttpServer::ICallback::Pointer DispatchServer::Callback::callback(
