@@ -280,7 +280,8 @@ std::shared_ptr<ICloudProvider> HttpCloudProvider::provider(
   auto hints = config_.hints(provider);
   if (!hints) return nullptr;
   if (access_token) (*hints)["access_token"] = access_token;
-  (*hints)["state"] = std::to_string(server->request_id_++);
+  (*hints)["state"] =
+      provider + SEPARATOR + std::to_string(server->request_id_++);
   ICloudProvider::InitData data;
   data.token_ = token;
   data.http_server_ =
@@ -465,7 +466,7 @@ Json::Value HttpServer::list_providers(const IHttpServer::IRequest&) const {
     if (auto hints = config_.hints(t)) {
       ICloudProvider::InitData data;
       data.hints_ = *hints;
-      data.hints_["state"] = t;
+      data.hints_["state"] = t + SEPARATOR;
       data.http_server_ = std::make_unique<MicroHttpdServerFactory>("", "");
       data.http_engine_ = std::make_unique<HttpWrapper>(http_);
       auto p = ICloudStorage::create()->provider(t, std::move(data));
