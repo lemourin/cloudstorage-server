@@ -38,24 +38,25 @@ class HttpCloudProvider {
 
   HttpCloudProvider(CloudConfig config) : config_(config) {}
 
-  ICloudProvider::Pointer provider(HttpServer*, const IHttpServer::IRequest&);
+  std::shared_ptr<ICloudProvider> provider(HttpServer*,
+                                           const IHttpServer::IRequest&);
 
-  void item(ICloudProvider::Pointer p, HttpServer* server, const char* item_id,
-            CompletedItem);
+  void item(std::shared_ptr<ICloudProvider> p, HttpServer* server,
+            const char* item_id, CompletedItem);
 
-  void exchange_code(ICloudProvider::Pointer p, HttpServer* server,
+  void exchange_code(std::shared_ptr<ICloudProvider> p, HttpServer* server,
                      const char* code, Completed);
 
-  void list_directory(ICloudProvider::Pointer p, HttpServer* server,
+  void list_directory(std::shared_ptr<ICloudProvider> p, HttpServer* server,
                       const char* item_id, const char* page_token, Completed);
 
-  void get_item_data(ICloudProvider::Pointer p, HttpServer* server,
+  void get_item_data(std::shared_ptr<ICloudProvider> p, HttpServer* server,
                      const char* item_id, Completed);
 
-  void thumbnail(ICloudProvider::Pointer p, HttpServer* server,
+  void thumbnail(std::shared_ptr<ICloudProvider> p, HttpServer* server,
                  const char* item_id, Completed);
 
-  static Json::Value error(ICloudProvider::Pointer p, Error);
+  static Json::Value error(std::shared_ptr<ICloudProvider> p, Error);
 
  private:
   CloudConfig config_;
@@ -93,7 +94,7 @@ class HttpServer {
 
   Json::Value list_providers(const IHttpServer::IRequest&) const;
 
-  void add(ICloudProvider::Pointer p, std::shared_ptr<IGenericRequest>);
+  void add(std::shared_ptr<ICloudProvider> p, std::shared_ptr<IGenericRequest>);
 
   int exec();
 
@@ -101,7 +102,7 @@ class HttpServer {
   friend class HttpCloudProvider;
 
   struct Request {
-    ICloudProvider::Pointer provider_;
+    std::shared_ptr<ICloudProvider> provider_;
     std::shared_ptr<IGenericRequest> request_;
   };
 

@@ -51,7 +51,7 @@ std::string file_type_to_string(IItem::FileType type) {
   }
 }
 
-Json::Value session(ICloudProvider::Pointer p) {
+Json::Value session(std::shared_ptr<ICloudProvider> p) {
   Json::Value result;
   result["token"] = p->token();
   if (!p->hints()["access_token"].empty())
@@ -271,7 +271,7 @@ void HttpServer::AuthCallback::done(const ICloudProvider& p,
     util::log("accepted", p.name(), p.token());
 }
 
-ICloudProvider::Pointer HttpCloudProvider::provider(
+std::shared_ptr<ICloudProvider> HttpCloudProvider::provider(
     HttpServer* server, const IHttpServer::IRequest& request) {
   const char* provider = request.get("provider");
   const char* token = request.get("token");
@@ -291,7 +291,7 @@ ICloudProvider::Pointer HttpCloudProvider::provider(
   return ICloudStorage::create()->provider(provider, std::move(data));
 }
 
-void HttpCloudProvider::exchange_code(ICloudProvider::Pointer p,
+void HttpCloudProvider::exchange_code(std::shared_ptr<ICloudProvider> p,
                                       HttpServer* server, const char* code,
                                       Completed c) {
   if (!code) {
@@ -312,7 +312,7 @@ void HttpCloudProvider::exchange_code(ICloudProvider::Pointer p,
   }));
 }
 
-void HttpCloudProvider::list_directory(ICloudProvider::Pointer p,
+void HttpCloudProvider::list_directory(std::shared_ptr<ICloudProvider> p,
                                        HttpServer* server, const char* item_id,
                                        const char* page_token, Completed c) {
   if (!page_token)
@@ -343,7 +343,7 @@ void HttpCloudProvider::list_directory(ICloudProvider::Pointer p,
   });
 }
 
-void HttpCloudProvider::get_item_data(ICloudProvider::Pointer p,
+void HttpCloudProvider::get_item_data(std::shared_ptr<ICloudProvider> p,
                                       HttpServer* server, const char* item_id,
                                       Completed c) {
   item(p, server, item_id, [=](auto item) {
@@ -358,8 +358,9 @@ void HttpCloudProvider::get_item_data(ICloudProvider::Pointer p,
   });
 }
 
-void HttpCloudProvider::item(ICloudProvider::Pointer p, HttpServer* server,
-                             const char* item_id, CompletedItem c) {
+void HttpCloudProvider::item(std::shared_ptr<ICloudProvider> p,
+                             HttpServer* server, const char* item_id,
+                             CompletedItem c) {
   if (!item_id)
     c(Error{IHttpRequest::NotFound, "not found"});
   else
@@ -367,15 +368,16 @@ void HttpCloudProvider::item(ICloudProvider::Pointer p, HttpServer* server,
                        : server->add(p, p->getItemDataAsync(item_id, c));
 }
 
-void HttpCloudProvider::thumbnail(ICloudProvider::Pointer p, HttpServer* server,
-                                  const char* item_id, Completed c) {
+void HttpCloudProvider::thumbnail(std::shared_ptr<ICloudProvider> p,
+                                  HttpServer* server, const char* item_id,
+                                  Completed c) {
   item(p, server, item_id, [=](auto item) {
     if (item.left()) return c(error(p, *item.left()));
 
     class download : public IDownloadFileCallback {
      public:
-      download(EitherError<IItem> item, ICloudProvider::Pointer p, bool secure,
-               uint16_t port, Completed c)
+      download(EitherError<IItem> item, std::shared_ptr<ICloudProvider> p,
+               bool secure, uint16_t port, Completed c)
           : item_(item), p_(p), secure_(secure), port_(port), c_(c) {}
 
       void receivedData(const char* data, uint32_t length) override {
@@ -432,7 +434,7 @@ void HttpCloudProvider::thumbnail(ICloudProvider::Pointer p, HttpServer* server,
       void progress(uint32_t, uint32_t) override {}
 
       EitherError<IItem> item_;
-      ICloudProvider::Pointer p_;
+      std::shared_ptr<ICloudProvider> p_;
       bool secure_;
       uint16_t port_;
       Completed c_;
@@ -447,7 +449,8 @@ void HttpCloudProvider::thumbnail(ICloudProvider::Pointer p, HttpServer* server,
   });
 }
 
-Json::Value HttpCloudProvider::error(ICloudProvider::Pointer p, Error e) {
+Json::Value HttpCloudProvider::error(std::shared_ptr<ICloudProvider> p,
+                                     Error e) {
   Json::Value result;
   result["error"] = e.code_;
   result["error_description"] = e.description_;
@@ -476,7 +479,7 @@ Json::Value HttpServer::list_providers(const IHttpServer::IRequest&) const {
   return result;
 }
 
-void HttpServer::add(ICloudProvider::Pointer p,
+void HttpServer::add(std::shared_ptr<ICloudProvider> p,
                      std::shared_ptr<IGenericRequest> r) {
   {
     std::lock_guard<std::mutex> lock(pending_requests_mutex_);
