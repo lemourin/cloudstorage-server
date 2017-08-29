@@ -324,7 +324,8 @@ void HttpCloudProvider::list_directory(ICloudProvider::Pointer p,
           if (list.right()) {
             Json::Value result = session(p);
             Json::Value array(Json::arrayValue);
-            for (auto i : list.right()->items_) {
+            auto lst = list.right()->items_;
+            for (auto i : lst) {
               Json::Value v;
               v["id"] = i->id();
               v["filename"] = i->filename();
