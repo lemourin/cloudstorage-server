@@ -407,7 +407,7 @@ void HttpCloudProvider::thumbnail(std::shared_ptr<ICloudProvider> p,
                 ffmpegthumbnailer::VideoThumbnailer thumbnailer;
                 auto file_url = p->hints()["file_url"];
                 auto url = i->url();
-                if (!file_url.empty()) {
+                if (!file_url.empty() && url.length() >= file_url.length()) {
                   if (url.substr(0, file_url.length()) == file_url) {
                     auto rest =
                         std::string(url.begin() + file_url.length(), url.end());
