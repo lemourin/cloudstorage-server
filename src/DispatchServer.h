@@ -4,11 +4,12 @@
 #include <memory>
 #include <mutex>
 
-#include "MicroHttpdServer.h"
+#include "Utility/MicroHttpdServer.h"
 #include "cloudstorage/IHttpServer.h"
 
 using cloudstorage::IHttpServer;
 using cloudstorage::IHttpServerFactory;
+using cloudstorage::MicroHttpdServerFactory;
 
 class DispatchServer {
  public:
@@ -34,7 +35,7 @@ class DispatchServer {
     mutable std::mutex lock_;
   };
 
-  DispatchServer(MicroHttpdServerFactory::Pointer, uint16_t port,
+  DispatchServer(MicroHttpdServerFactory*, uint16_t port,
                  ProxyFunction);
 
  private:

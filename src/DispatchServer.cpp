@@ -3,11 +3,12 @@
 #include <cassert>
 #include "Utility.h"
 
-DispatchServer::DispatchServer(MicroHttpdServerFactory::Pointer f,
-                               uint16_t port, ProxyFunction p)
+using cloudstorage::MicroHttpdServer;
+
+DispatchServer::DispatchServer(MicroHttpdServerFactory* f, uint16_t port,
+                               ProxyFunction p)
     : callback_(std::make_shared<Callback>(p)),
-      http_server_(f->create(callback_, "",
-                             MicroHttpdServer::Type::SingleThreaded, port)) {}
+      http_server_(f->create(callback_, port)) {}
 
 DispatchServer::Callback::Callback(ProxyFunction f) : proxy_(f) {}
 

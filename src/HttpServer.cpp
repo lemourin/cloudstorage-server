@@ -10,8 +10,8 @@ extern "C" {
 #include <queue>
 #include <sstream>
 
-#include "CurlHttp.h"
 #include "Utility.h"
+#include "Utility/CurlHttp.h"
 
 using namespace std::string_literals;
 using namespace std::placeholders;
@@ -205,10 +205,8 @@ HttpServer::HttpServer(Json::Value config)
       }),
       request_id_(),
       server_port_(config["port"].asInt()),
-      server_factory_(std::make_unique<MicroHttpdServerFactory>(
-          util::read_file(config["ssl_cert"].asString()),
-          util::read_file(config["ssl_key"].asString()))),
-      main_server_(DispatchServer(server_factory_, server_port_,
+      server_factory_(std::make_unique<MicroHttpdServerFactory>()),
+      main_server_(DispatchServer(server_factory_.get(), server_port_,
                                   std::bind(&HttpServer::proxy, this, _1, _2))),
       query_server_(main_server_, "",
                     std::make_unique<ConnectionCallback>(this)),
@@ -467,7 +465,7 @@ Json::Value HttpServer::list_providers(const IHttpServer::IRequest&) const {
       ICloudProvider::InitData data;
       data.hints_ = *hints;
       data.hints_["state"] = t + SEPARATOR;
-      data.http_server_ = std::make_unique<MicroHttpdServerFactory>("", "");
+      data.http_server_ = std::make_unique<MicroHttpdServerFactory>();
       data.http_engine_ = std::make_unique<HttpWrapper>(http_);
       auto p = ICloudStorage::create()->provider(t, std::move(data));
       Json::Value v;

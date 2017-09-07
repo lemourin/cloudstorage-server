@@ -113,7 +113,7 @@ class HttpServer {
   std::thread clean_up_thread_;
   std::atomic_int request_id_;
   uint16_t server_port_;
-  MicroHttpdServerFactory::Pointer server_factory_;
+  std::unique_ptr<MicroHttpdServerFactory> server_factory_;
   DispatchServer main_server_;
   ServerWrapper query_server_;
   CloudConfig config_;

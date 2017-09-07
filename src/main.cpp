@@ -1,5 +1,3 @@
-#include <microhttpd.h>
-
 #include <chrono>
 #include <climits>
 #include <fstream>
