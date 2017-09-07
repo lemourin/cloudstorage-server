@@ -6,7 +6,6 @@ AM_CXXFLAGS = \
 	$(libavutil_CFLAGS) \
 	$(libffmpegthumbnailer_CFLAGS) \
 	$(libcloudstorage_CFLAGS) \
-	$(libcrypto_CFLAGS) \
 	$(libcurl_CFLAGS)
 
 AM_LDFLAGS = \
@@ -28,6 +27,5 @@ cloudstorage_server_LDADD = \
 	$(libavutil_LIBS) \
 	$(libffmpegthumbnailer_LIBS) \
 	$(libcloudstorage_LIBS) \
-	$(libcrypto_LIBS) \
 	$(libcurl_LIBS)
 
