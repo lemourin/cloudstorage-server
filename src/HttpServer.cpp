@@ -349,10 +349,13 @@ void HttpCloudProvider::get_item_data(std::shared_ptr<ICloudProvider> p,
     if (item.left()) {
       c(error(p, *item.left()));
     } else {
-      Json::Value result = session(p);
-      result["url"] = item.right()->url();
-      result["id"] = item.right()->id();
-      c(result);
+      server->add(p, p->getItemUrlAsync(item.right(), [=](auto e) {
+        if (e.left()) return c(error(p, *e.left()));
+        Json::Value result = session(p);
+        result["url"] = *e.right();
+        result["id"] = item.right()->id();
+        c(result);
+      }));
     }
   });
 }
@@ -397,33 +400,30 @@ void HttpCloudProvider::thumbnail(std::shared_ptr<ICloudProvider> p,
         };
         if (thumbnail.left()) {
           util::enqueue([=]() {
-            if ((i->type() == IItem::FileType::Video ||
-                 i->type() == IItem::FileType::Image) &&
-                !i->url().empty()) {
-              try {
-                std::vector<uint8_t> buffer;
-                ffmpegthumbnailer::VideoThumbnailer thumbnailer;
-                auto file_url = p->hints()["file_url"];
-                auto url = i->url();
-                if (!file_url.empty() && url.length() >= file_url.length()) {
-                  if (url.substr(0, file_url.length()) == file_url) {
-                    auto rest =
-                        std::string(url.begin() + file_url.length(), url.end());
-                    url = (secure ? "https" : "http") + "://127.0.0.1:"s +
-                          std::to_string(port) + rest;
-                  }
-                }
-                thumbnailer.generateThumbnail(url, ThumbnailerImageType::Png,
-                                              buffer);
-                auto ptr = reinterpret_cast<const char*>(buffer.data());
-                f(std::vector<char>(ptr, ptr + buffer.size()));
-              } catch (const std::exception& e) {
-                util::log("couldn't generate thumbnail:", e.what());
-                c(error(p, Error{IHttpRequest::Bad, e.what()}));
-              }
-            } else {
-              c(error(
+            auto url_result = p_->getItemUrlAsync(i)->result();
+            if (!url_result.right())
+              return c(error(
                   p, Error{IHttpRequest::Bad, "couldn't generate thumbnail"s}));
+            auto url = *url_result.right();
+            try {
+              std::vector<uint8_t> buffer;
+              ffmpegthumbnailer::VideoThumbnailer thumbnailer;
+              auto file_url = p->hints()["file_url"];
+              if (!file_url.empty() && url.length() >= file_url.length()) {
+                if (url.substr(0, file_url.length()) == file_url) {
+                  auto rest =
+                      std::string(url.begin() + file_url.length(), url.end());
+                  url = (secure ? "https" : "http") + "://127.0.0.1:"s +
+                        std::to_string(port) + rest;
+                }
+              }
+              thumbnailer.generateThumbnail(url, ThumbnailerImageType::Png,
+                                            buffer);
+              auto ptr = reinterpret_cast<const char*>(buffer.data());
+              f(std::vector<char>(ptr, ptr + buffer.size()));
+            } catch (const std::exception& e) {
+              util::log("couldn't generate thumbnail:", e.what());
+              c(error(p, Error{IHttpRequest::Bad, e.what()}));
             }
           });
         } else {
