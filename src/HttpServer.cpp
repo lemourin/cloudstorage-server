@@ -400,7 +400,7 @@ void HttpCloudProvider::thumbnail(std::shared_ptr<ICloudProvider> p,
         };
         if (thumbnail.left()) {
           util::enqueue([=]() {
-            auto url_result = p_->getItemUrlAsync(i)->result();
+            auto url_result = p->getItemUrlAsync(i)->result();
             if (!url_result.right())
               return c(error(
                   p, Error{IHttpRequest::Bad, "couldn't generate thumbnail"s}));
