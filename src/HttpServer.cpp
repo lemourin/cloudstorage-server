@@ -430,7 +430,7 @@ void HttpCloudProvider::thumbnail(std::shared_ptr<ICloudProvider> p,
           f(data_);
         }
       }
-      void progress(uint32_t, uint32_t) override {}
+      void progress(uint64_t, uint64_t) override {}
 
       EitherError<IItem> item_;
       std::shared_ptr<ICloudProvider> p_;
