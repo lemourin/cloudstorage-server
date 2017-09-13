@@ -86,7 +86,7 @@ class ResponseCallback : public IHttpServer::IResponse::ICallback {
       return Suspend;
     }
     auto r = buffer_->result_.readsome(buffer, size);
-    if (r == 0) return Abort;
+    if (r == 0) return End;
     return r;
   }
 
@@ -140,7 +140,7 @@ IHttpServer::IResponse::Pointer HttpServer::ConnectionCallback::handle(
         auto url = c.url();
         auto response =
             c.response(IHttpRequest::Ok, {{"Content-Type", "application/json"}},
-                       -1, std::move(cb));
+                       IHttpServer::IResponse::UnknownSize, std::move(cb));
         buffer->response_ = response.get();
         response->completed([=]() {
           std::lock_guard<std::mutex> lock(buffer->lock_);
