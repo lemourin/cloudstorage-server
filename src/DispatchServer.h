@@ -35,8 +35,7 @@ class DispatchServer {
     mutable std::mutex lock_;
   };
 
-  DispatchServer(MicroHttpdServerFactory*, uint16_t port,
-                 ProxyFunction);
+  DispatchServer(MicroHttpdServerFactory*, uint16_t port, ProxyFunction);
 
  private:
   friend class ServerWrapper;
@@ -83,6 +82,8 @@ class RequestWrapper : public IHttpServer::IRequest {
   }
 
   std::string url() const override { return r_.url(); }
+
+  std::string method() const override { return r_.method(); }
 
   IHttpServer::IResponse::Pointer response(
       int code, const IHttpServer::IResponse::Headers& h, int size,
