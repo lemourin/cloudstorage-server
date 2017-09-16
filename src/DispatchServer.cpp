@@ -1,7 +1,7 @@
 #include "DispatchServer.h"
 
 #include <cassert>
-#include "Utility.h"
+#include "Utility/Utility.h"
 
 using cloudstorage::MicroHttpdServer;
 
@@ -40,8 +40,8 @@ IHttpServer::IResponse::Pointer DispatchServer::Callback::handle(
   if (!state) state = "";
   auto callback = this->callback(state);
   if (!callback)
-    return util::response_from_string(request, 404, {},
-                                      "missing/invalid state parameter");
+    return cloudstorage::util::response_from_string(
+        request, 404, {}, "missing/invalid state parameter");
   else
     return callback->handle(request);
 }

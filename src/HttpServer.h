@@ -6,6 +6,7 @@
 #include <json/json.h>
 #include <atomic>
 #include <condition_variable>
+#include <future>
 #include <mutex>
 #include <thread>
 
@@ -118,7 +119,7 @@ class HttpServer {
   ServerWrapper query_server_;
   CloudConfig config_;
   std::shared_ptr<IHttp> http_;
-  util::Semaphore semaphore_;
+  std::promise<int> semaphore_;
   mutable std::mutex lock_;
 };
 

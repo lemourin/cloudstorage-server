@@ -12,9 +12,15 @@ extern "C" {
 
 #include "Utility.h"
 #include "Utility/CurlHttp.h"
+#include "Utility/Utility.h"
 
 using namespace std::string_literals;
 using namespace std::placeholders;
+
+using cloudstorage::util::log;
+using cloudstorage::util::response_from_string;
+using cloudstorage::util::to_base64;
+using ::util::enqueue;
 
 const std::string SEPARATOR = "--";
 
@@ -122,10 +128,9 @@ IHttpServer::IResponse::Pointer HttpServer::ConnectionCallback::handle(
     const IHttpServer::IRequest& c) {
   Json::Value result(Json::objectValue);
   if (server_->done_)
-    return util::response_from_string(c, IHttpRequest::ServiceUnavailable, {},
-                                      "");
+    return response_from_string(c, IHttpRequest::ServiceUnavailable, {}, "");
   if (c.url() == "/quit") {
-    server_->semaphore_.notify();
+    server_->semaphore_.set_value(0);
   } else {
     const char* provider = c.get("provider");
     if (provider) {
@@ -151,10 +156,10 @@ IHttpServer::IResponse::Pointer HttpServer::ConnectionCallback::handle(
           buffer->result_ << Json::StyledWriter().write(e);
           buffer->ready_ = true;
           buffer->resume();
-          util::log(url, "lasted",
-                    std::chrono::duration<double>(
-                        std::chrono::system_clock::now() - start_time)
-                        .count());
+          log(url, "lasted",
+              std::chrono::duration<double>(std::chrono::system_clock::now() -
+                                            start_time)
+                  .count());
         };
         if (c.url() == "/exchange_code"s) {
           p.exchange_code(r, server_, c.get("code"), func);
@@ -179,11 +184,11 @@ IHttpServer::IResponse::Pointer HttpServer::ConnectionCallback::handle(
     }
   }
 
-  if (c.url() != "/health_check") util::log(c.url(), "received");
+  if (c.url() != "/health_check") log(c.url(), "received");
 
   auto str = Json::StyledWriter().write(result);
-  return util::response_from_string(
-      c, 200, {{"Content-Type", "application/json"}}, str);
+  return response_from_string(c, 200, {{"Content-Type", "application/json"}},
+                              str);
 }
 
 HttpServer::HttpServer(Json::Value config)
@@ -228,7 +233,7 @@ IHttpServer::IResponse::Pointer HttpServer::proxy(
     auto provider = request.get("provider");
     auto file = request.get("file");
     if (!provider || !file)
-      return util::response_from_string(request, IHttpRequest::Bad, {}, "");
+      return response_from_string(request, IHttpRequest::Bad, {}, "");
     HttpCloudProvider c(config_);
     auto provider_object = c.provider(this, request);
     if (!provider_object) return nullptr;
@@ -257,16 +262,16 @@ IHttpServer::IResponse::Pointer HttpServer::proxy(
 
 ICloudProvider::IAuthCallback::Status
 HttpServer::AuthCallback::userConsentRequired(const ICloudProvider& p) {
-  util::log("waiting for user consent", p.name());
+  log("waiting for user consent", p.name());
   return Status::None;
 }
 
 void HttpServer::AuthCallback::done(const ICloudProvider& p,
                                     EitherError<void> e) {
   if (e.left())
-    util::log("auth error", e.left()->code_, e.left()->description_);
+    log("auth error", e.left()->code_, e.left()->description_);
   else
-    util::log("accepted", p.name(), p.token());
+    log("accepted", p.name(), p.token());
 }
 
 std::shared_ptr<ICloudProvider> HttpCloudProvider::provider(
@@ -393,13 +398,12 @@ void HttpCloudProvider::thumbnail(std::shared_ptr<ICloudProvider> p,
         auto port = port_;
         auto f = [=](const std::vector<char>& data) {
           Json::Value result = session(p);
-          result["thumbnail"] = util::to_base64(
-              reinterpret_cast<const unsigned char*>(data.begin().base()),
-              data.size());
+          result["thumbnail"] =
+              to_base64(std::string(data.begin(), data.end()));
           c(result);
         };
         if (thumbnail.left()) {
-          util::enqueue([=]() {
+          enqueue([=]() {
             auto url_result = p->getItemUrlAsync(i)->result();
             if (!url_result.right())
               return c(error(
@@ -422,7 +426,7 @@ void HttpCloudProvider::thumbnail(std::shared_ptr<ICloudProvider> p,
               auto ptr = reinterpret_cast<const char*>(buffer.data());
               f(std::vector<char>(ptr, ptr + buffer.size()));
             } catch (const std::exception& e) {
-              util::log("couldn't generate thumbnail:", e.what());
+              log("couldn't generate thumbnail:", e.what());
               c(error(p, Error{IHttpRequest::Bad, e.what()}));
             }
           });
@@ -487,7 +491,4 @@ void HttpServer::add(std::shared_ptr<ICloudProvider> p,
   pending_requests_condition_.notify_one();
 }
 
-int HttpServer::exec() {
-  semaphore_.wait();
-  return 0;
-}
+int HttpServer::exec() { return semaphore_.get_future().get(); }
