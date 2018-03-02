@@ -10,6 +10,8 @@ extern "C" {
 #include <queue>
 #include <sstream>
 
+#define WITH_CURL
+
 #include "Utility.h"
 #include "Utility/CurlHttp.h"
 #include "Utility/Utility.h"

@@ -1,6 +1,8 @@
 #ifndef DISPATCH_SERVER_H
 #define DISPATCH_SERVER_H
 
+#define WITH_MICROHTTPD
+
 #include <memory>
 #include <mutex>
 
