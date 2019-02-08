@@ -14,7 +14,10 @@ PKG_CHECK_MODULES([libjsoncpp], [jsoncpp])
 PKG_CHECK_MODULES([libmicrohttpd], [libmicrohttpd])
 PKG_CHECK_MODULES([libcloudstorage], [libcloudstorage])
 PKG_CHECK_MODULES([libavutil], [libavutil])
-PKG_CHECK_MODULES([libffmpegthumbnailer], [libffmpegthumbnailer])
+PKG_CHECK_MODULES([libavformat], [libavformat])
+PKG_CHECK_MODULES([libavcodec], [libavcodec])
+PKG_CHECK_MODULES([libavfilter], [libavfilter])
+PKG_CHECK_MODULES([libswscale], [libswscale])
 PKG_CHECK_MODULES([libcurl], [libcurl])
 
 case "${host_os}" in

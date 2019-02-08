@@ -4,7 +4,6 @@ extern "C" {
 #include <libavutil/log.h>
 }
 
-#include <libffmpegthumbnailer/videothumbnailer.h>
 #include <condition_variable>
 #include <fstream>
 #include <queue>
@@ -15,6 +14,8 @@ extern "C" {
 #include "Utility.h"
 #include "Utility/CurlHttp.h"
 #include "Utility/Utility.h"
+
+#include "GenerateThumbnail.h"
 
 using namespace std::string_literals;
 using namespace std::placeholders;
@@ -413,8 +414,6 @@ void HttpCloudProvider::thumbnail(std::shared_ptr<ICloudProvider> p,
                   p, Error{IHttpRequest::Bad, "couldn't generate thumbnail"s}));
             auto url = *url_result.right();
             try {
-              std::vector<uint8_t> buffer;
-              ffmpegthumbnailer::VideoThumbnailer thumbnailer;
               auto file_url = p->hints()["file_url"];
               if (!file_url.empty() && url.length() >= file_url.length()) {
                 if (url.substr(0, file_url.length()) == file_url) {
@@ -424,10 +423,13 @@ void HttpCloudProvider::thumbnail(std::shared_ptr<ICloudProvider> p,
                         std::to_string(port) + rest;
                 }
               }
-              thumbnailer.generateThumbnail(url, ThumbnailerImageType::Png,
-                                            buffer);
-              auto ptr = reinterpret_cast<const char*>(buffer.data());
-              f(std::vector<char>(ptr, ptr + buffer.size()));
+              auto buffer = cloudstorage::generate_thumbnail(
+                  url, [](auto) { return false; });
+              if (buffer.left()) {
+                throw std::logic_error(buffer.left()->description_);
+              }
+              auto ptr = reinterpret_cast<const char*>(buffer.right()->data());
+              f(std::vector<char>(ptr, ptr + buffer.right()->size()));
             } catch (const std::exception& e) {
               log("couldn't generate thumbnail:", e.what());
               c(error(p, Error{IHttpRequest::Bad, e.what()}));
@@ -447,11 +449,10 @@ void HttpCloudProvider::thumbnail(std::shared_ptr<ICloudProvider> p,
       std::vector<char> data_;
     };
 
-    server->add(
-        p,
-        p->getThumbnailAsync(item.right(), std::make_shared<download>(
-                                               item, p, server->config_.secure_,
-                                               server->server_port_, c)));
+    server->add(p, p->getThumbnailAsync(item.right(),
+                                        std::make_shared<download>(
+                                            item, p, server->config_.secure_,
+                                            server->server_port_, c)));
   });
 }
 
